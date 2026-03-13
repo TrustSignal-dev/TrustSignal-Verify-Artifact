@@ -46,10 +46,10 @@ If the API omits a distinct verification identifier, the action uses `receipt_id
 ## Current Limitations
 
 - The included test path uses a local fetch mock rather than a live TrustSignal deployment.
-- Marketplace publication still requires extraction into a dedicated public repository.
+- A live external workflow validation is still pending before the first public release tag.
 
 ## Next Steps
 
-- Add a live integration test against a deployed TrustSignal API environment.
-- Publish semantic version tags and maintain a stable major tag.
-- Move this package to the repository root of a dedicated public action repository.
+- Run the external workflow in `docs/live-test.md` against a deployed TrustSignal API environment.
+- Publish semantic version tags beginning with `v0.1.0`.
+- Maintain a stable major tag once the action contract is proven in production use.

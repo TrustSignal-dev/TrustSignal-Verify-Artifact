@@ -5,7 +5,7 @@ Verify build artifacts in CI, issue signed verification receipts, and preserve p
 [![License: MIT](https://img.shields.io/badge/license-MIT-informational)](LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white)](package.json)
 
-`TrustSignal Verify Artifact` is a JavaScript GitHub Action for teams that want a clean verification checkpoint inside CI/CD. It hashes a build artifact or accepts a precomputed SHA-256 digest, submits that identity to TrustSignal, and returns receipt metadata your pipeline can persist, attach to release records, or feed into later verification workflows.
+`TrustSignal Verify Artifact` is a JavaScript GitHub Action for teams that want a clean verification checkpoint inside CI/CD. It hashes a build artifact or accepts a precomputed SHA-256 digest, submits that identity to TrustSignal, and returns signed receipt metadata your pipeline can persist, attach to release records, or feed into later verification workflows.
 
 TrustSignal is built for artifact integrity, signed receipts, verifiable provenance, and downstream auditability without exposing internal verification engine details.
 
@@ -81,7 +81,7 @@ jobs:
 
       - name: Verify artifact with TrustSignal
         id: trustsignal
-        uses: trustsignal-dev/trustsignal-verify-artifact@v1
+        uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.1.0
         with:
           api_base_url: https://api.trustsignal.dev
           api_key: ${{ secrets.TRUSTSIGNAL_API_KEY }}
@@ -114,7 +114,7 @@ jobs:
     steps:
       - name: Verify known digest
         id: trustsignal
-        uses: trustsignal-dev/trustsignal-verify-artifact@v1
+        uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.1.0
         with:
           api_base_url: https://api.trustsignal.dev
           api_key: ${{ secrets.TRUSTSIGNAL_API_KEY }}
@@ -169,8 +169,26 @@ TrustSignal helps teams add a verification layer to CI/CD without exposing propr
 ## Current Limitations
 
 - The local test path uses a fetch mock rather than a live TrustSignal deployment.
-- Marketplace publication still requires final public repository metadata, release tags, and release management hygiene.
 - A production-facing integration test against a deployed TrustSignal API is still pending.
+- GitHub Marketplace submission can happen after the first external workflow validation and release tag.
+
+## Live External Test
+
+Use a separate repository for the first live run against `api.trustsignal.dev` or your target TrustSignal environment.
+
+Required repository secrets:
+
+- `TRUSTSIGNAL_API_BASE_URL`
+- `TRUSTSIGNAL_API_KEY`
+
+Use the copy-paste workflow in [docs/live-test.md](docs/live-test.md). A successful run should produce:
+
+- `verification_id`
+- `status=verified`
+- `receipt_id`
+- `receipt_signature`
+
+If the API returns a non-valid result and `fail_on_mismatch` is `true`, the action step fails. If `fail_on_mismatch` is `false`, the workflow continues and the `status` output captures the mismatch or invalid state.
 
 ## Local Validation
 
@@ -202,6 +220,16 @@ npm run validate:local
 - Create signed or otherwise controlled release tags according to your release process.
 - Update documentation when the public API contract or output mapping changes.
 - Marketplace publication requires a public repository, a root-level `action.yml`, and release tags.
+
+## First Release Checklist
+
+- Confirm `action.yml` is at the repository root.
+- Confirm README examples and output mappings are accurate.
+- Confirm `node --check src/index.js`, `node --check dist/index.js`, and `node scripts/test-local.js` pass.
+- Confirm the external workflow in [docs/live-test.md](docs/live-test.md) passes from a separate repository.
+- Create tag `v0.1.0`.
+- Push the tag.
+- Prepare Marketplace submission later if needed.
 
 ## Roadmap
 
