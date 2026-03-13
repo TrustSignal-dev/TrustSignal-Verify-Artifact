@@ -1,5 +1,14 @@
 # Contributing
 
+## Development Setup
+
+Install dependencies and keep the committed runtime file aligned with the source:
+
+```bash
+npm install
+npm run build
+```
+
 ## Local Validation
 
 Run the lightweight validation checks before opening a change:
@@ -25,6 +34,13 @@ npm run validate:local
 - `dist/`: committed runtime entrypoint for action consumers
 - `scripts/`: local validation helpers
 - `docs/`: integration-facing documentation
+
+## Proposing Changes
+
+- Keep changes focused and reviewable.
+- Update `README.md` and docs when the action contract or usage changes.
+- Rebuild `dist/index.js` if `src/index.js` changes.
+- Open a pull request with the validation commands you ran and the expected user-facing impact.
 
 ## Release Basics
 

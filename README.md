@@ -1,8 +1,9 @@
 # TrustSignal Verify Artifact
 
-Verify build artifacts in CI, issue signed verification receipts, and preserve provenance for later verification and audit workflows.
+Verify artifacts in CI and issue signed verification receipts using TrustSignal.
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-informational)](LICENSE)
+[![GitHub release](https://img.shields.io/github/v/release/TrustSignal-dev/TrustSignal-Verify-Artifact)](https://github.com/TrustSignal-dev/TrustSignal-Verify-Artifact/releases)
+[![License](https://img.shields.io/github/license/TrustSignal-dev/TrustSignal-Verify-Artifact)](LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white)](package.json)
 
 `TrustSignal Verify Artifact` is a JavaScript GitHub Action for teams that want a clean verification checkpoint inside CI/CD. It hashes a build artifact or accepts a precomputed SHA-256 digest, submits that identity to TrustSignal, and returns signed receipt metadata your pipeline can persist, attach to release records, or feed into later verification workflows.
@@ -11,25 +12,10 @@ TrustSignal is built for artifact integrity, signed receipts, verifiable provena
 
 ## Features
 
-- Verify build artifacts directly inside GitHub Actions
-- Issue signed verification receipts for CI outputs
-- Preserve provenance context from the GitHub workflow runtime
-- Support later verification and audit workflows through `receipt_id`
-- Fail closed on invalid or mismatched verification results when required
-
-## Why Teams Use It
-
-- Add a lightweight integrity control to release workflows
-- Preserve a verifiable record of what was checked in CI
-- Improve traceability across build, release, and audit paths
-- Standardize artifact verification without embedding internal platform logic in workflows
-
-## Quick Start
-
-1. Add a TrustSignal API key to GitHub Actions secrets.
-2. Call the action with either `artifact_path` or `artifact_hash`.
-3. Capture `receipt_id` and `receipt_signature` in downstream steps.
-4. Store receipt metadata anywhere you need later verification or audit evidence.
+- Artifact integrity verification
+- Signed verification receipts
+- CI workflow metadata capture
+- Later verification support
 
 ## Inputs
 
@@ -53,7 +39,7 @@ Provide exactly one of `artifact_path` or `artifact_hash`.
 | `receipt_id` | Signed receipt identifier returned by TrustSignal. |
 | `receipt_signature` | Signed receipt signature returned by TrustSignal. |
 
-## Example Usage
+## Example Workflow
 
 ### Verify An Artifact File
 
@@ -128,6 +114,38 @@ jobs:
           echo "Status: ${{ steps.trustsignal.outputs.status }}"
 ```
 
+## Security Model
+
+The action communicates with the TrustSignal API using an API key supplied through GitHub Actions secrets. The key is sent only in the `x-api-key` header. The action hashes local artifacts with SHA-256 when `artifact_path` is used, captures workflow metadata from the GitHub runtime, and returns receipt metadata for downstream verification workflows.
+
+## Why TrustSignal
+
+TrustSignal helps teams add a verification layer to CI/CD without exposing proprietary implementation details in every workflow. The action focuses on artifact identity, signed receipts, provenance continuity, and later verification so integrity signals can travel with the software lifecycle.
+
+## Current Limitations
+
+- The local test path uses a fetch mock rather than a live TrustSignal deployment.
+- A production-facing integration test against a deployed TrustSignal API is still pending.
+- GitHub Marketplace submission can happen after the first external workflow validation and release tag.
+
+## Live Test
+
+Use a separate repository for the first live run against `api.trustsignal.dev` or your target TrustSignal environment.
+
+Required repository secrets:
+
+- `TRUSTSIGNAL_API_BASE_URL`
+- `TRUSTSIGNAL_API_KEY`
+
+Use the copy-paste workflow in [docs/live-test.md](docs/live-test.md). A successful run should produce:
+
+- `verification_id`
+- `status=verified`
+- `receipt_id`
+- `receipt_signature`
+
+If the API returns a non-valid result and `fail_on_mismatch` is `true`, the action step fails. If `fail_on_mismatch` is `false`, the workflow continues and the `status` output captures the mismatch or invalid state.
+
 ## Request Contract
 
 The action calls `POST /api/v1/verify` with a generic artifact verification payload:
@@ -153,42 +171,6 @@ The action calls `POST /api/v1/verify` with a generic artifact verification payl
 ```
 
 GitHub workflow context is added automatically when those environment variables are available at runtime.
-
-## Security Considerations
-
-- The API key is sent only in the `x-api-key` header.
-- The action does not log secrets.
-- Error messages are concise and avoid raw internal details.
-- Local artifact hashing uses SHA-256 from Node.js `crypto`.
-- `fail_on_mismatch` allows pipelines to enforce fail-closed verification behavior.
-
-## Why TrustSignal
-
-TrustSignal helps teams add a verification layer to CI/CD without exposing proprietary implementation details in every workflow. The action focuses on artifact identity, signed receipts, provenance continuity, and later verification so integrity signals can travel with the software lifecycle.
-
-## Current Limitations
-
-- The local test path uses a fetch mock rather than a live TrustSignal deployment.
-- A production-facing integration test against a deployed TrustSignal API is still pending.
-- GitHub Marketplace submission can happen after the first external workflow validation and release tag.
-
-## Live External Test
-
-Use a separate repository for the first live run against `api.trustsignal.dev` or your target TrustSignal environment.
-
-Required repository secrets:
-
-- `TRUSTSIGNAL_API_BASE_URL`
-- `TRUSTSIGNAL_API_KEY`
-
-Use the copy-paste workflow in [docs/live-test.md](docs/live-test.md). A successful run should produce:
-
-- `verification_id`
-- `status=verified`
-- `receipt_id`
-- `receipt_signature`
-
-If the API returns a non-valid result and `fail_on_mismatch` is `true`, the action step fails. If `fail_on_mismatch` is `false`, the workflow continues and the `status` output captures the mismatch or invalid state.
 
 ## Local Validation
 

@@ -1,5 +1,5 @@
 name: TrustSignal Verify Artifact
-description: Verify build artifacts with TrustSignal and capture signed verification receipt metadata in GitHub Actions.
+description: Verify build artifacts and issue signed TrustSignal verification receipts.
 author: TrustSignal
 branding:
   icon: shield
