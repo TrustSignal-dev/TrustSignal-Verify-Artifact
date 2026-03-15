@@ -2,6 +2,8 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 
+const FETCH_TIMEOUT_MS = 30000;
+
 function getInput(name, options = {}) {
   const envName = `INPUT_${name.replace(/ /g, '_').toUpperCase()}`;
   const raw = process.env[envName];
@@ -51,10 +53,13 @@ function sha256File(filePath) {
     throw new Error(`Artifact path is not a file: ${absolutePath}`);
   }
 
-  const hash = crypto.createHash('sha256');
-  const fileBuffer = fs.readFileSync(absolutePath);
-  hash.update(fileBuffer);
-  return hash.digest('hex');
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash('sha256');
+    const stream = fs.createReadStream(absolutePath);
+    stream.on('data', (chunk) => hash.update(chunk));
+    stream.on('end', () => resolve(hash.digest('hex')));
+    stream.on('error', reject);
+  });
 }
 
 function validateHash(value) {
@@ -78,7 +83,7 @@ function normalizeBaseUrl(value) {
     throw new Error('api_base_url must use http or https');
   }
 
-  url.pathname = url.pathname.replace(/\/+$/, '');
+  url.pathname = url.pathname.replace(/\/+$/, '') || '/';
   url.search = '';
   url.hash = '';
   return url.toString().replace(/\/$/, '');
@@ -94,6 +99,10 @@ function getGitHubContext() {
   };
 }
 
+function omitUndefined(obj) {
+  return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined));
+}
+
 function buildVerificationRequest({ artifactHash, artifactPath, source }) {
   const github = getGitHubContext();
   const provider = source.replace(/[^a-zA-Z0-9._-]/g, '-').slice(0, 64) || 'github-actions';
@@ -103,14 +112,14 @@ function buildVerificationRequest({ artifactHash, artifactPath, source }) {
       hash: artifactHash,
       algorithm: 'sha256'
     },
-    source: {
+    source: omitUndefined({
       provider,
       repository: github.repository,
       workflow: github.workflow,
       runId: github.runId,
       actor: github.actor,
       commit: github.sha
-    },
+    }),
     metadata: {
       ...(artifactPath ? { artifactPath } : {})
     }
@@ -118,8 +127,10 @@ function buildVerificationRequest({ artifactHash, artifactPath, source }) {
 }
 
 function deriveStatus(responseBody) {
+  if (typeof responseBody.status === 'string' && responseBody.status) {
+    return responseBody.status;
+  }
   return (
-    responseBody.status ||
     responseBody.verificationStatus ||
     responseBody.result ||
     (responseBody.verified === true ? 'verified' : undefined) ||
@@ -200,14 +211,29 @@ async function callVerificationApi({ apiBaseUrl, apiKey, artifactHash, artifactP
   const endpoint = `${apiBaseUrl}/api/v1/verify`;
   const payload = buildVerificationRequest({ artifactHash, artifactPath, source });
 
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': apiKey
-    },
-    body: JSON.stringify(payload)
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+  let response;
+  try {
+    response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'accept': 'application/json',
+        'x-api-key': apiKey
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+  } catch (err) {
+    if (err && err.name === 'AbortError') {
+      throw new Error(`TrustSignal API request timed out after ${FETCH_TIMEOUT_MS / 1000}s`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 
   const responseBody = await parseJsonResponse(response);
 
@@ -241,7 +267,7 @@ async function run() {
     }
 
     const artifactHash = artifactPath
-      ? sha256File(artifactPath)
+      ? await sha256File(artifactPath)
       : validateHash(providedArtifactHash);
 
     const responseBody = await callVerificationApi({
