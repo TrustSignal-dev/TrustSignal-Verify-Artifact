@@ -10,6 +10,16 @@ Verify artifacts in CI and issue signed verification receipts using TrustSignal.
 
 TrustSignal is built for artifact integrity, signed receipts, verifiable provenance, and downstream auditability without exposing internal verification engine details.
 
+## Demo
+
+Run the demo workflow directly from the **Actions** tab — no API credentials needed:
+
+1. Go to **Actions → TrustSignal Action Demo**.
+2. Click **Run workflow**.
+3. Watch the three annotated jobs run in real time.
+
+See [docs/demo.md](docs/demo.md) for a full walkthrough of what each job shows.
+
 ## Features
 
 - Artifact integrity verification
