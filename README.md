@@ -20,6 +20,36 @@ Run the demo workflow directly from the **Actions** tab — no API credentials n
 
 See [docs/demo.md](docs/demo.md) for a full walkthrough of what each job shows.
 
+## TrustSignal Demo Workflow
+
+A screen-recording-ready workflow is available at `.github/workflows/trustsignal-demo.yml`.
+It creates a real demo artifact, calls the TrustSignal action with live credentials, and
+prints a clean verification summary.
+
+**Triggers**
+
+| Trigger | How |
+| --- | --- |
+| Manual | **Actions → TrustSignal Demo → Run workflow** |
+| Push | Push any commit to the `demo/trustsignal-action` branch |
+
+**Required repository secrets**
+
+| Secret | Description |
+| --- | --- |
+| `TRUSTSIGNAL_API_BASE_URL` | Base URL for the TrustSignal API, e.g. `https://api.trustsignal.dev` |
+| `TRUSTSIGNAL_API_KEY` | TrustSignal API key for your account |
+
+Add both secrets under **Settings → Secrets and variables → Actions** before running the workflow.
+
+**What the workflow does**
+
+1. Checks out the repository.
+2. Creates `dist/demo-artifact.txt` with stable, reproducible content.
+3. Prints the SHA-256 digest of the artifact.
+4. Runs `TrustSignal-dev/TrustSignal-Verify-Artifact@v0.1.0` against the artifact.
+5. Prints a summary with the artifact path, hash, verification status, and receipt ID.
+
 ## Features
 
 - Artifact integrity verification
