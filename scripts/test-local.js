@@ -1,7 +1,12 @@
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+
+function sha256(value) {
+  return crypto.createHash('sha256').update(value).digest('hex');
+}
 
 function readOutputs(filePath) {
   const raw = fs.readFileSync(filePath, 'utf8');
@@ -17,35 +22,33 @@ function readOutputs(filePath) {
   );
 }
 
-function runAction({ artifactContents, failOnMismatch, receiptId }) {
+function runAction({ artifactContents, failOnMismatch, receiptInput, receiptId, useMockApi = true }) {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'trustsignal-action-'));
   const artifactPath = path.join(tempDir, 'artifact.txt');
   const outputPath = path.join(tempDir, 'github-output.txt');
   fs.writeFileSync(artifactPath, artifactContents, 'utf8');
 
-  const result = spawnSync(
-    process.execPath,
-    ['-r', './scripts/mock-fetch.js', 'dist/index.js'],
-    {
-      cwd: path.resolve(__dirname, '..'),
-      env: {
-        ...process.env,
-        INPUT_API_BASE_URL: 'https://api.trustsignal.dev',
-        INPUT_API_KEY: 'test-key',
-        INPUT_ARTIFACT_PATH: artifactPath,
-        INPUT_SOURCE: 'local-test',
-        INPUT_FAIL_ON_MISMATCH: String(failOnMismatch),
-        GITHUB_OUTPUT: outputPath,
-        GITHUB_RUN_ID: '12345',
-        GITHUB_REPOSITORY: 'trustsignal-dev/trustsignal-verify-artifact',
-        GITHUB_WORKFLOW: 'Artifact Verification',
-        GITHUB_ACTOR: 'octocat',
-        GITHUB_SHA: 'abc123def456',
-        MOCK_RECEIPT_ID: receiptId
-      },
-      encoding: 'utf8'
-    }
-  );
+  const execArgs = useMockApi ? ['-r', './scripts/mock-fetch.js', 'dist/index.js'] : ['dist/index.js'];
+  const result = spawnSync(process.execPath, execArgs, {
+    cwd: path.resolve(__dirname, '..'),
+    env: {
+      ...process.env,
+      INPUT_API_BASE_URL: 'https://api.trustsignal.dev',
+      INPUT_API_KEY: 'test-key',
+      INPUT_ARTIFACT_PATH: artifactPath,
+      INPUT_RECEIPT: receiptInput || '',
+      INPUT_SOURCE: 'local-test',
+      INPUT_FAIL_ON_MISMATCH: String(failOnMismatch),
+      GITHUB_OUTPUT: outputPath,
+      GITHUB_RUN_ID: '12345',
+      GITHUB_REPOSITORY: 'trustsignal-dev/trustsignal-verify-artifact',
+      GITHUB_WORKFLOW: 'Artifact Verification',
+      GITHUB_ACTOR: 'octocat',
+      GITHUB_SHA: 'abc123def456',
+      MOCK_RECEIPT_ID: receiptId
+    },
+    encoding: 'utf8'
+  });
 
   const outputs = fs.existsSync(outputPath) ? readOutputs(outputPath) : {};
   return {
@@ -63,36 +66,55 @@ function assert(condition, message) {
 }
 
 function main() {
-  const validRun = runAction({
+  const validApiRun = runAction({
     artifactContents: 'valid artifact',
     failOnMismatch: true,
     receiptId: '00000000-0000-4000-8000-000000000001'
   });
 
-  const tamperedRun = runAction({
+  const receiptHash = sha256('valid artifact');
+  const receiptPayload = JSON.stringify({
+    receipt_id: '00000000-0000-4000-8000-000000000010',
+    receipt_signature: 'sig-00000000-0000-4000-8000-000000000010',
+    artifact: { hash: receiptHash }
+  });
+
+  const validReceiptRun = runAction({
+    artifactContents: 'valid artifact',
+    failOnMismatch: true,
+    receiptInput: receiptPayload,
+    useMockApi: false
+  });
+
+  const driftReceiptRun = runAction({
     artifactContents: 'tampered artifact',
     failOnMismatch: false,
-    receiptId: '00000000-0000-4000-8000-000000000002'
+    receiptInput: receiptPayload,
+    useMockApi: false
   });
 
-  const failingMismatchRun = runAction({
+  const driftReceiptFailRun = runAction({
     artifactContents: 'tampered artifact',
     failOnMismatch: true,
-    receiptId: '00000000-0000-4000-8000-000000000003'
+    receiptInput: receiptPayload,
+    useMockApi: false
   });
 
-  assert(validRun.status === 0, `Expected valid run to succeed, got ${validRun.status}: ${validRun.stderr}`);
-  assert(validRun.outputs.verification_id === 'verify-00000000-0000-4000-8000-000000000001', 'Valid run verification_id mismatch');
-  assert(validRun.outputs.receipt_id === '00000000-0000-4000-8000-000000000001', 'Valid run receipt_id mismatch');
-  assert(validRun.outputs.status === 'verified', `Expected valid status to be verified, got ${validRun.outputs.status}`);
-  assert(validRun.outputs.receipt_signature === 'sig-00000000-0000-4000-8000-000000000001', 'Valid run receipt_signature mismatch');
+  assert(validApiRun.status === 0, `Expected API valid run to succeed, got ${validApiRun.status}: ${validApiRun.stderr}`);
+  assert(validApiRun.outputs.status === 'verified', 'Expected API run status=verified');
+  assert(validApiRun.stdout.includes('✔ Artifact matches receipt. Integrity verified.'), 'Expected success message in API run stdout');
 
-  assert(tamperedRun.status === 0, `Expected tampered run to complete when fail_on_mismatch=false, got ${tamperedRun.status}: ${tamperedRun.stderr}`);
-  assert(tamperedRun.outputs.verification_id === 'verify-00000000-0000-4000-8000-000000000002', 'Tampered run verification_id mismatch');
-  assert(tamperedRun.outputs.receipt_id === '00000000-0000-4000-8000-000000000002', 'Tampered run receipt_id mismatch');
-  assert(tamperedRun.outputs.status === 'invalid', `Expected tampered status to be invalid, got ${tamperedRun.outputs.status}`);
-  assert(tamperedRun.outputs.receipt_signature === 'sig-00000000-0000-4000-8000-000000000002', 'Tampered run receipt_signature mismatch');
-  assert(failingMismatchRun.status !== 0, 'Expected mismatch run to fail when fail_on_mismatch=true');
+  assert(validReceiptRun.status === 0, `Expected receipt valid run to succeed, got ${validReceiptRun.status}: ${validReceiptRun.stderr}`);
+  assert(validReceiptRun.outputs.verification_id === '00000000-0000-4000-8000-000000000010', 'Expected receipt id to map to verification_id');
+  assert(validReceiptRun.outputs.status === 'verified', `Expected receipt valid status verified, got ${validReceiptRun.outputs.status}`);
+  assert(validReceiptRun.stdout.includes('✔ Artifact matches receipt. Integrity verified.'), 'Expected success message in receipt run stdout');
+
+  assert(driftReceiptRun.status === 0, `Expected drift run to continue when fail_on_mismatch=false, got ${driftReceiptRun.status}: ${driftReceiptRun.stderr}`);
+  assert(driftReceiptRun.outputs.status === 'invalid', `Expected drift status invalid, got ${driftReceiptRun.outputs.status}`);
+  assert(driftReceiptRun.stdout.includes('✖ Artifact drift detected. File no longer matches original receipt.'), 'Expected drift message in stdout');
+
+  assert(driftReceiptFailRun.status !== 0, 'Expected drift run to fail when fail_on_mismatch=true');
+  assert(driftReceiptFailRun.stderr.includes('Artifact drift detected. File no longer matches original receipt.'), 'Expected drift error message when failing');
 
   process.stdout.write('Local action contract test passed\n');
 }

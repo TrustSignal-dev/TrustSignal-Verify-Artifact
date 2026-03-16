@@ -5,3 +5,5 @@ coverage/
 tmp/
 !dist/
 !dist/index.js
+
+.trustsignal/

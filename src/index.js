@@ -194,6 +194,62 @@ function extractMessage(responseBody) {
   );
 }
 
+function extractReceiptArtifactHash(receiptInput) {
+  if (!receiptInput) return '';
+
+  try {
+    const parsed = JSON.parse(receiptInput);
+    const candidates = [
+      parsed?.artifact_hash,
+      parsed?.artifactHash,
+      parsed?.artifact?.hash,
+      parsed?.artifact?.sha256,
+      parsed?.fingerprint,
+      parsed?.hash
+    ];
+
+    for (const candidate of candidates) {
+      if (typeof candidate === 'string' && candidate.trim()) {
+        return validateHash(candidate.trim());
+      }
+    }
+
+    throw new Error('receipt did not include an artifact hash');
+  } catch (error) {
+    if (/^[a-f0-9]{64}$/i.test(receiptInput)) {
+      return validateHash(receiptInput);
+    }
+
+    throw new Error(`Invalid receipt input: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+function parseReceiptMetadata(receiptInput) {
+  if (!receiptInput) {
+    return {
+      receiptId: '',
+      receiptSignature: ''
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(receiptInput);
+    return {
+      receiptId: parsed?.receipt_id || parsed?.receiptId || parsed?.id || '',
+      receiptSignature:
+        parsed?.receipt_signature ||
+        parsed?.receiptSignature?.signature ||
+        parsed?.receiptSignature ||
+        ''
+    };
+  } catch {
+    return {
+      receiptId: '',
+      receiptSignature: ''
+    };
+  }
+}
+
 async function parseJsonResponse(response) {
   const rawBody = await response.text();
   if (!rawBody) {
@@ -251,10 +307,9 @@ async function callVerificationApi({ apiBaseUrl, apiKey, artifactHash, artifactP
 
 async function run() {
   try {
-    const apiBaseUrl = normalizeBaseUrl(getInput('api_base_url', { required: true }));
-    const apiKey = getInput('api_key', { required: true });
     const artifactPath = getInput('artifact_path');
     const providedArtifactHash = getInput('artifact_hash');
+    const receipt = getInput('receipt');
     const source = getInput('source') || 'github-actions';
     const failOnMismatch = getBooleanInput('fail_on_mismatch', true);
 
@@ -269,6 +324,33 @@ async function run() {
     const artifactHash = artifactPath
       ? await sha256File(artifactPath)
       : validateHash(providedArtifactHash);
+
+    if (receipt) {
+      const receiptHash = extractReceiptArtifactHash(receipt);
+      const { receiptId, receiptSignature } = parseReceiptMetadata(receipt);
+      const matches = artifactHash === receiptHash;
+      const status = matches ? 'verified' : 'invalid';
+
+      setOutput('verification_id', receiptId || 'local-receipt-check');
+      setOutput('status', status);
+      setOutput('receipt_id', receiptId);
+      setOutput('receipt_signature', receiptSignature);
+
+      if (matches) {
+        process.stdout.write('✔ Artifact matches receipt. Integrity verified.\n');
+      } else {
+        process.stdout.write('✖ Artifact drift detected. File no longer matches original receipt.\n');
+      }
+
+      if (failOnMismatch && !matches) {
+        throw new Error('Artifact drift detected. File no longer matches original receipt.');
+      }
+
+      return;
+    }
+
+    const apiBaseUrl = normalizeBaseUrl(getInput('api_base_url', { required: true }));
+    const apiKey = getInput('api_key', { required: true });
 
     const responseBody = await callVerificationApi({
       apiBaseUrl,
@@ -294,6 +376,12 @@ async function run() {
     setOutput('status', status);
     setOutput('receipt_id', receiptId);
     setOutput('receipt_signature', receiptSignature);
+
+    if (isValid) {
+      process.stdout.write('✔ Artifact matches receipt. Integrity verified.\n');
+    } else {
+      process.stdout.write('✖ Artifact drift detected. File no longer matches original receipt.\n');
+    }
 
     if (failOnMismatch && !isValid) {
       throw new Error(`TrustSignal verification was not valid. Status: ${status}`);
