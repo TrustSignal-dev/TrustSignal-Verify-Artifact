@@ -1,0 +1,58 @@
+name: TrustSignal Demo
+
+# Trigger manually from the Actions tab, or by pushing to the demo branch.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - demo/trustsignal-action
+
+jobs:
+  trustsignal-demo:
+    name: TrustSignal Verify Artifact — Demo
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create demo artifact
+        run: |
+          mkdir -p dist
+          printf 'TrustSignal demo artifact\nrepo: %s\nrun:  %s\n' \
+            "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" > dist/demo-artifact.txt
+          echo "Artifact written to dist/demo-artifact.txt"
+          cat dist/demo-artifact.txt
+
+      - name: Print artifact SHA-256
+        run: |
+          echo "────────────────────────────────────────────────────────────"
+          echo "  artifact : dist/demo-artifact.txt"
+          echo "  SHA-256  : $(sha256sum dist/demo-artifact.txt | cut -d' ' -f1)"
+          echo "────────────────────────────────────────────────────────────"
+
+      - name: Verify artifact with TrustSignal
+        id: trustsignal
+        uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.1.0
+        with:
+          api_base_url: ${{ secrets.TRUSTSIGNAL_API_BASE_URL }}
+          api_key: ${{ secrets.TRUSTSIGNAL_API_KEY }}
+          artifact_path: dist/demo-artifact.txt
+          source: github-actions
+          fail_on_mismatch: "true"
+
+      - name: Print verification summary
+        run: |
+          echo "────────────────────────────────────────────────────────────"
+          echo "  TrustSignal Verification Summary"
+          echo "────────────────────────────────────────────────────────────"
+          echo "  artifact path   : dist/demo-artifact.txt"
+          echo "  artifact hash   : $(sha256sum dist/demo-artifact.txt | cut -d' ' -f1)"
+          echo "  status          : ${{ steps.trustsignal.outputs.status }}"
+          echo "  verification_id : ${{ steps.trustsignal.outputs.verification_id }}"
+          echo "  receipt_id      : ${{ steps.trustsignal.outputs.receipt_id }}"
+          echo "────────────────────────────────────────────────────────────"
+          echo "  TrustSignal verification completed ✓"
+          echo "────────────────────────────────────────────────────────────"
