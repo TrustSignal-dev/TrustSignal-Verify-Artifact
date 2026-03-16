@@ -1,0 +1,126 @@
+name: TrustSignal Action Demo
+
+# Trigger this workflow manually from the Actions tab to watch a live demo run.
+# The demo uses the built-in local test harness so no live API credentials are needed.
+on:
+  workflow_dispatch:
+
+jobs:
+  # ─── Scenario 1: Verify an artifact file (hash computed by the action) ────────
+  demo-artifact-path:
+    name: "Demo: verify artifact file"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Create demo artifact
+        run: |
+          mkdir -p dist
+          printf 'valid artifact' > dist/demo.txt
+          echo "Artifact content written to dist/demo.txt"
+          echo "SHA-256 (for reference): $(sha256sum dist/demo.txt | cut -d' ' -f1)"
+
+      - name: Run local test harness (simulates live API call)
+        run: node scripts/test-local.js
+
+      - name: Show what a live action step looks like
+        run: |
+          echo "──────────────────────────────────────────────────────────"
+          echo "  In a real workflow the step below calls the TrustSignal"
+          echo "  API and returns signed receipt metadata:"
+          echo ""
+          echo "  - name: Verify artifact with TrustSignal"
+          echo "    id: trustsignal"
+          echo "    uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.1.0"
+          echo "    with:"
+          echo "      api_base_url: https://api.trustsignal.dev"
+          echo "      api_key: \${{ secrets.TRUSTSIGNAL_API_KEY }}"
+          echo "      artifact_path: dist/demo.txt"
+          echo "      source: github-actions"
+          echo "      fail_on_mismatch: \"true\""
+          echo "──────────────────────────────────────────────────────────"
+
+  # ─── Scenario 2: Verify a precomputed SHA-256 digest ─────────────────────────
+  demo-artifact-hash:
+    name: "Demo: verify precomputed hash"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Show what a hash-based verification step looks like
+        run: |
+          echo "──────────────────────────────────────────────────────────"
+          echo "  Hash-based verification (no file needed at runtime):"
+          echo ""
+          echo "  - name: Verify known digest with TrustSignal"
+          echo "    id: trustsignal"
+          echo "    uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.1.0"
+          echo "    with:"
+          echo "      api_base_url: https://api.trustsignal.dev"
+          echo "      api_key: \${{ secrets.TRUSTSIGNAL_API_KEY }}"
+          echo "      artifact_hash: 2f77668a9dfbf8d5847cf2d5d0370740e0c0601b4f061c1181f58c77c2b8f486"
+          echo "      source: github-actions"
+          echo "      fail_on_mismatch: \"true\""
+          echo "──────────────────────────────────────────────────────────"
+
+      - name: Run local test harness (simulates live API call)
+        run: node scripts/test-local.js
+
+  # ─── Scenario 3: Show action outputs ─────────────────────────────────────────
+  demo-outputs:
+    name: "Demo: action outputs"
+    runs-on: ubuntu-latest
+    needs: [demo-artifact-path, demo-artifact-hash]
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Simulate action outputs
+        id: trustsignal
+        run: |
+          # Simulate what the action writes to GITHUB_OUTPUT
+          echo "verification_id=verify-00000000-0000-4000-8000-000000000001" >> "$GITHUB_OUTPUT"
+          echo "status=verified" >> "$GITHUB_OUTPUT"
+          echo "receipt_id=00000000-0000-4000-8000-000000000001" >> "$GITHUB_OUTPUT"
+          echo "receipt_signature=sig-00000000-0000-4000-8000-000000000001" >> "$GITHUB_OUTPUT"
+
+      - name: Display verification outputs
+        run: |
+          echo "──────────────────────────────────────────────────────────"
+          echo "  TrustSignal Verify Artifact — outputs"
+          echo "──────────────────────────────────────────────────────────"
+          echo "  verification_id : ${{ steps.trustsignal.outputs.verification_id }}"
+          echo "  status          : ${{ steps.trustsignal.outputs.status }}"
+          echo "  receipt_id      : ${{ steps.trustsignal.outputs.receipt_id }}"
+          echo "  receipt_signature: ${{ steps.trustsignal.outputs.receipt_signature }}"
+          echo "──────────────────────────────────────────────────────────"
+          echo ""
+          echo "  Persist the receipt_id and receipt_signature for later"
+          echo "  verification or audit workflows."
+          echo "──────────────────────────────────────────────────────────"
