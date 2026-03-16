@@ -1,0 +1,6 @@
+# Code Owners — reviewers listed here are automatically requested on every pull request
+# that touches the matching paths. At least one code owner approval is required before
+# merging when branch protection rules are active.
+
+# Default owners for everything in this repository
+* @TrustSignal-dev/maintainers
