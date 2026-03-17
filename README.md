@@ -25,7 +25,7 @@ jobs:
 
       - name: Verify and issue receipt
         id: trustsignal
-        uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.1.0
+        uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.0
         with:
           api_base_url: https://api.trustsignal.dev
           api_key: ${{ secrets.TRUSTSIGNAL_API_KEY }}
@@ -66,7 +66,7 @@ You can verify a local file against a saved receipt JSON.
 - name: Verify against saved receipt
   id: receipt-check
   continue-on-error: true
-  uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.1.0
+  uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.0
   with:
     artifact_path: dist/release.txt
     receipt: ${{ vars.RELEASE_RECEIPT_JSON }}

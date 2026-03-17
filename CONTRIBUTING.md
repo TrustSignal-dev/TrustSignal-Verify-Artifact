@@ -46,5 +46,5 @@ npm run validate:local
 
 - Follow semantic versioning.
 - Commit updated `dist/index.js` with each release.
-- Publish immutable tags such as `v0.1.0` and maintain a major tag such as `v1`.
+- Publish immutable tags such as `v0.2.0` and maintain a major tag such as `v1`.
 - GitHub Marketplace publication requires a public repository with `action.yml` at the repository root.
