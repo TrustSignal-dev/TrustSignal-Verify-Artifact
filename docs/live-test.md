@@ -36,7 +36,7 @@ jobs:
 
       - name: Verify artifact with TrustSignal
         id: trustsignal
-        uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.1.0
+        uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.0
         with:
           api_base_url: ${{ secrets.TRUSTSIGNAL_API_BASE_URL }}
           api_key: ${{ secrets.TRUSTSIGNAL_API_KEY }}
@@ -89,7 +89,7 @@ If you already have a SHA-256 digest, replace `artifact_path` with `artifact_has
 ```yaml
       - name: Verify known digest with TrustSignal
         id: trustsignal
-        uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.1.0
+        uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.0
         with:
           api_base_url: ${{ secrets.TRUSTSIGNAL_API_BASE_URL }}
           api_key: ${{ secrets.TRUSTSIGNAL_API_KEY }}

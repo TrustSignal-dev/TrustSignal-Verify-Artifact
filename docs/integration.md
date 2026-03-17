@@ -51,5 +51,5 @@ If the API omits a distinct verification identifier, the action uses `receipt_id
 ## Next Steps
 
 - Run the external workflow in `docs/live-test.md` against a deployed TrustSignal API environment.
-- Publish semantic version tags beginning with `v0.1.0`.
+- Publish semantic version tags beginning with `v0.2.0`.
 - Maintain a stable major tag once the action contract is proven in production use.
