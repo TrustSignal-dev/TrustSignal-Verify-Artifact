@@ -55,6 +55,13 @@ Managed mode sends the artifact hash and GitHub run metadata to TrustSignal.
     api_key: ${{ secrets.TRUSTSIGNAL_API_KEY }}
 ```
 
+Managed mode requires two things to agree:
+
+- GitHub repository secret `TRUSTSIGNAL_API_KEY`
+- TrustSignal API backend config that accepts that same key in `API_KEYS` and grants it `verify|read` in `API_KEY_SCOPES`
+
+If those two sides are out of sync, the action will fail with `403 Forbidden: invalid API key`.
+
 Outputs:
 
 - `sha256`
@@ -116,6 +123,32 @@ The repository CI includes a guarded `Live Managed Validation` job that runs on 
 The repository also includes a nightly `Live Test Report` workflow that invokes the published `TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.0` action against the production API. The badge at the top of this README points to that workflow.
 
 Additional operator notes are in [docs/live-test.md](docs/live-test.md).
+
+For a polished walkthrough that covers both the action demo and the live TrustSignal API/app demo flow, see [docs/how-to-demo-guide.md](docs/how-to-demo-guide.md).
+
+For a portable MDX asset that can be dropped into a Code Hike-style docs site, see [docs/codehike-demo.mdx](docs/codehike-demo.mdx).
+
+For a richer annotated Code Hike-oriented page and a real screencast shot list, see [docs/codehike-demo-annotated.mdx](docs/codehike-demo-annotated.mdx) and [docs/demo-recording-script.md](docs/demo-recording-script.md).
+
+## API Key Provisioning
+
+For managed mode, do not treat the GitHub secret as the only setup step.
+
+The same live key value must exist in both places:
+
+1. GitHub repository secret: `TRUSTSIGNAL_API_KEY`
+2. TrustSignal API service environment:
+   - `API_KEYS`
+   - `API_KEY_SCOPES`
+
+Expected backend format:
+
+```text
+API_KEYS=your-live-key
+API_KEY_SCOPES=your-live-key=verify|read
+```
+
+If you rotate the GitHub secret, rotate the backend allowlist and scope mapping at the same time.
 
 ## License
 

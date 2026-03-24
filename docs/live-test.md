@@ -15,6 +15,24 @@ Add this repository secret before expecting live validation to run:
 
 - `TRUSTSIGNAL_API_KEY`
 
+## Required Backend Configuration
+
+The GitHub repository secret is only half of the setup. The API backend must also be configured to accept that same key.
+
+Required API service configuration:
+
+- `API_KEYS` includes the exact same key value stored in `TRUSTSIGNAL_API_KEY`
+- `API_KEY_SCOPES` grants that same key at least `verify|read`
+
+Example:
+
+```text
+API_KEYS=your-live-key
+API_KEY_SCOPES=your-live-key=verify|read
+```
+
+After changing backend environment variables, redeploy the API service before rerunning the workflow.
+
 ## Expected Results
 
 - The action step completes on a GitHub-hosted runner.

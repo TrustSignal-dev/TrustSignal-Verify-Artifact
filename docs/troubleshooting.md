@@ -1,81 +1,91 @@
-# Troubleshooting (TrustSignal Verify Artifact)
+# Troubleshooting
 
-This page is written for beginners. If you get stuck, start here.
+## `Missing required input: api_base_url`
 
-## Action not running
+You used managed mode without providing the API endpoint.
 
-What happened  
-You pushed code, but you don’t see any TrustSignal logs in GitHub.
+Fix:
 
-Why it happens  
-- The workflow file is not in the right place (`.github/workflows/…`).
-- The workflow only runs on certain events (for example, `workflow_dispatch` means “manual run”).
-- The workflow file has YAML indentation issues.
+- Pass `api_base_url`, for example `https://api.trustsignal.dev`.
+- Pass `api_key`.
+- Or switch to local receipt mode if you are not calling the TrustSignal API.
 
-How to fix it  
-1) Confirm the file path is exactly `.github/workflows/verify.yml`.  
-2) In GitHub, open **Actions** and manually run the workflow if it uses `workflow_dispatch`.  
-3) Check the workflow file indentation (YAML is spacing-sensitive).
+## `Missing required input: api_key`
 
-## API key missing
+You used managed mode without providing an API key.
 
-What happened  
-You used `mode: managed` and the action failed with an error like “api_base_url and api_key are required”.
+Fix:
 
-Why it happens  
-Managed mode talks to the TrustSignal API, so it needs two secrets.
+1. Add the repository secret `TRUSTSIGNAL_API_KEY` in GitHub Actions secrets.
+2. Pass it to the action:
 
-How to fix it  
-1) In GitHub: **Settings → Secrets and variables → Actions**  
-2) Add secrets:
-   - `TRUSTSIGNAL_API_BASE_URL` (example: `https://api.trustsignal.dev`)
-   - `TRUSTSIGNAL_API_KEY`
-3) Reference them in your workflow:
-   - `api_base_url: ${{ secrets.TRUSTSIGNAL_API_BASE_URL }}`
-   - `api_key: ${{ secrets.TRUSTSIGNAL_API_KEY }}`
-
-## Verification failed
-
-What happened  
-The action reports a failure (managed mode) or exits with an error (local verification).
-
-Why it happens  
-- The artifact you verified does not match the stored receipt (drift).
-- In managed mode: the TrustSignal API returned `invalid` for the verification result.
-
-How to fix it  
-1) If you expect the file to be unchanged, rebuild it and verify again.  
-2) If you expect changes, generate a new receipt to create a new baseline.  
-3) In managed mode, confirm your API base URL is correct and reachable.
-
-## Artifact drift detected
-
-What happened  
-You see:
-
-```text
-✖ Artifact drift detected
-File no longer matches original receipt
+```yaml
+with:
+  mode: managed
+  api_base_url: https://api.trustsignal.dev
+  api_key: ${{ secrets.TRUSTSIGNAL_API_KEY }}
 ```
 
-Why it happens  
-The file’s fingerprint today does not match the fingerprint stored in the receipt. That means the file changed.
+## `TrustSignal API request failed with status 403: Forbidden: invalid API key`
 
-How to fix it  
-- If the change was unexpected: investigate your build steps and dependencies.  
-- If the change was expected: generate a new receipt and store it as the new baseline.
+GitHub reached the TrustSignal API, but the API rejected the key.
 
-## Network error
+This is usually a provisioning problem, not a networking problem.
 
-What happened  
-Managed mode fails with timeouts or “API request failed”.
+Fix:
 
-Why it happens  
-- The TrustSignal API base URL is wrong.
-- GitHub’s runner can’t reach the API (temporary outage or network policy).
+1. Confirm the GitHub repository secret `TRUSTSIGNAL_API_KEY` contains the exact key value you intend to use.
+2. In the TrustSignal API service configuration, add that same key value to `API_KEYS`.
+3. In the TrustSignal API service configuration, grant that same key at least `verify|read` in `API_KEY_SCOPES`.
+4. Redeploy the API service after changing environment variables.
 
-How to fix it  
-1) Double-check `TRUSTSIGNAL_API_BASE_URL`.  
-2) Re-run the workflow (temporary issues often resolve).  
-3) If it keeps happening, try again later or contact support with the failing run link.
+Expected backend format:
 
+```text
+API_KEYS=<same-key-value>
+API_KEY_SCOPES=<same-key-value>=verify|read
+```
+
+If you already have multiple keys, keep them comma-separated in `API_KEYS` and semicolon-separated in `API_KEY_SCOPES`.
+
+## `Either artifact_path or artifact_hash must be provided`
+
+The action needs something concrete to verify.
+
+Fix: provide one of these inputs:
+
+- `path`
+- `artifact_path`
+- `artifact_hash`
+
+## `Provide only one of artifact_path or artifact_hash`
+
+You passed both a file path and a precomputed hash.
+
+Fix: keep only one input source.
+
+## `artifact_hash must be a valid SHA-256 hex digest`
+
+Your hash is malformed.
+
+Fix: pass a 64-character SHA-256 hex digest. An optional `sha256:` prefix is accepted.
+
+## `Artifact drift detected: artifact does not match receipt`
+
+The current file fingerprint does not match the saved receipt fingerprint.
+
+Fix options:
+
+1. Rebuild the expected artifact and verify again.
+2. Issue a new receipt if the artifact was intentionally changed.
+3. Use `fail_on_mismatch: "false"` only when you want the workflow to continue after a mismatch.
+
+## Managed mode skipped in demo or live workflows
+
+The repository workflows intentionally skip managed-mode steps unless the secret is present and the event is allowed.
+
+Fix:
+
+- Confirm `TRUSTSIGNAL_API_KEY` is configured in repository secrets.
+- Use `workflow_dispatch` for the managed demo job.
+- Check the workflow summary to see whether the job was skipped or actually failed.

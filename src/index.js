@@ -191,6 +191,21 @@ async function parseJsonResponse(response) {
   }
 }
 
+function buildApiErrorMessage(status, responseBody) {
+  const message = responseBody.error || responseBody.message || '';
+  const suffix = message ? `: ${message}` : '';
+
+  if (status === 403 && /invalid api key/i.test(message)) {
+    return (
+      `TrustSignal API request failed with status ${status}${suffix}. ` +
+      'Confirm the GitHub secret value is also present in the API backend `API_KEYS` allowlist ' +
+      'and granted at least `verify|read` in `API_KEY_SCOPES`, then redeploy the API service.'
+    );
+  }
+
+  return `TrustSignal API request failed with status ${status}${suffix}`;
+}
+
 async function callVerificationApi({ apiBaseUrl, apiKey, artifactHash, artifactPath, source }) {
   const endpoint = `${apiBaseUrl}/api/v1/verify`;
   const payload = buildVerificationRequest({ artifactHash, artifactPath, source });
@@ -221,8 +236,7 @@ async function callVerificationApi({ apiBaseUrl, apiKey, artifactHash, artifactP
 
   const responseBody = await parseJsonResponse(response);
   if (!response.ok) {
-    const message = responseBody.error || responseBody.message || '';
-    throw new Error(`TrustSignal API request failed with status ${response.status}${message ? `: ${message}` : ''}`);
+    throw new Error(buildApiErrorMessage(response.status, responseBody));
   }
 
   return responseBody;

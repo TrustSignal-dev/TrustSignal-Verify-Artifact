@@ -191,6 +191,21 @@ function main() {
   assert(managedHardFail.status !== 0, 'Managed hard-fail run should fail');
   assert(managedHardFail.stderr.includes('TrustSignal verification was not valid'), 'Managed hard-fail error mismatch');
 
+  process.stdout.write('Running managed mode invalid-key guidance test with mock fetch...\n');
+  const managedInvalidKey = runAction({
+    inputs: {
+      mode: 'managed',
+      path: managedArtifactPath,
+      api_base_url: 'https://api.trustsignal.dev',
+      api_key: 'wrong-key',
+      upload_receipt: 'false'
+    },
+    useMockApi: true
+  });
+  assert(managedInvalidKey.status !== 0, 'Managed invalid-key run should fail');
+  assert(managedInvalidKey.stderr.includes('API_KEYS'), 'Managed invalid-key error should mention API_KEYS');
+  assert(managedInvalidKey.stderr.includes('API_KEY_SCOPES'), 'Managed invalid-key error should mention API_KEY_SCOPES');
+
   process.stdout.write('Local validation tests passed\n');
 }
 

@@ -14,17 +14,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Create demo artifact
+      - name: Build release archive
         run: |
-          mkdir -p demo
-          printf 'TrustSignal demo artifact\n' > demo/artifact.txt
+          mkdir -p build/release
+          cp README.md build/release/README.md
+          cp action.yml build/release/action.yml
+          tar -czf build/trustsignal-verify-artifact.tgz -C build/release .
 
       - name: Generate baseline receipt
         id: baseline
         uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.0
         with:
           mode: local
-          path: demo/artifact.txt
+          path: build/trustsignal-verify-artifact.tgz
           upload_receipt: "false"
 
       - name: Verify artifact against saved receipt
@@ -32,7 +34,7 @@ jobs:
         uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.0
         with:
           mode: local
-          path: demo/artifact.txt
+          path: build/trustsignal-verify-artifact.tgz
           receipt: ${{ steps.baseline.outputs.receipt_path }}
           upload_receipt: "false"
 
@@ -47,22 +49,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Create demo artifact
+      - name: Build release archive
         run: |
-          mkdir -p demo
-          printf 'TrustSignal demo artifact\n' > demo/drift.txt
+          mkdir -p build/drift
+          cp README.md build/drift/README.md
+          cp action.yml build/drift/action.yml
+          tar -czf build/trustsignal-drift-check.tgz -C build/drift .
 
       - name: Generate baseline receipt
         id: baseline
         uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.0
         with:
           mode: local
-          path: demo/drift.txt
+          path: build/trustsignal-drift-check.tgz
           upload_receipt: "false"
 
-      - name: Mutate artifact
+      - name: Mutate release archive contents
         run: |
-          printf 'tampered\n' >> demo/drift.txt
+          printf 'tampered\n' > build/drift/MUTATED.txt
+          tar -czf build/trustsignal-drift-check.tgz -C build/drift .
 
       - name: Verify drift is detected
         id: drift
@@ -70,7 +75,7 @@ jobs:
         uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.0
         with:
           mode: local
-          path: demo/drift.txt
+          path: build/trustsignal-drift-check.tgz
           receipt: ${{ steps.baseline.outputs.receipt_path }}
           upload_receipt: "false"
 
@@ -86,11 +91,13 @@ jobs:
       - name: Skip managed demo when secret is unavailable
         if: ${{ github.event_name != 'workflow_dispatch' || env.TRUSTSIGNAL_API_KEY == '' }}
         run: echo "Skipping managed live demo because this is not a manual run or TRUSTSIGNAL_API_KEY is not configured."
-      - name: Create managed demo artifact
+      - name: Build managed release archive
         if: ${{ github.event_name == 'workflow_dispatch' && env.TRUSTSIGNAL_API_KEY != '' }}
         run: |
-          mkdir -p demo
-          printf 'TrustSignal managed demo artifact\n' > demo/managed.txt
+          mkdir -p build/managed
+          cp README.md build/managed/README.md
+          cp action.yml build/managed/action.yml
+          tar -czf build/trustsignal-managed-release.tgz -C build/managed .
 
       - name: Verify artifact with TrustSignal
         id: trustsignal
@@ -100,7 +107,7 @@ jobs:
           mode: managed
           api_base_url: https://api.trustsignal.dev
           api_key: ${{ env.TRUSTSIGNAL_API_KEY }}
-          path: demo/managed.txt
+          path: build/trustsignal-managed-release.tgz
           upload_receipt: "false"
       - name: Verify outputs
         if: ${{ github.event_name == 'workflow_dispatch' && env.TRUSTSIGNAL_API_KEY != '' }}

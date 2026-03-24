@@ -39,6 +39,27 @@
 }
 ```
 
+## Managed Mode Authentication
+
+Managed mode uses the `x-api-key` header when calling `POST /api/v1/verify`.
+
+That means there are two sides to provision:
+
+1. GitHub repository secret
+   - `TRUSTSIGNAL_API_KEY`
+2. TrustSignal API backend
+   - `API_KEYS` must contain that same key value
+   - `API_KEY_SCOPES` must grant that same key at least `verify|read`
+
+Example backend configuration:
+
+```text
+API_KEYS=your-live-key
+API_KEY_SCOPES=your-live-key=verify|read
+```
+
+If the backend is not provisioned to accept the same key value used in GitHub, the action will fail with `403 Forbidden: invalid API key`.
+
 ## Outputs
 
 - `verification_id`
@@ -48,13 +69,14 @@
 
 If the API omits a distinct verification identifier, the action uses `receipt_id` as a compatibility alias for `verification_id`.
 
-## Current Limitations
+## Validation Status
 
-- The included test path uses a local fetch mock rather than a live TrustSignal deployment.
-- A live external workflow validation is still pending before the first public release tag.
+- Local validation still uses a deterministic mock fetch harness for fast repeatable tests.
+- The repository now also includes real GitHub-hosted validation against `https://api.trustsignal.dev`.
+- The published action `TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.0` has been exercised successfully from a real GitHub Actions runner.
 
 ## Next Steps
 
-- Run the external workflow in `docs/live-test.md` against a deployed TrustSignal API environment.
-- Publish semantic version tags beginning with `v0.1.0`.
-- Maintain a stable major tag once the action contract is proven in production use.
+- Maintain the live validation workflows in `docs/live-test.md`.
+- Keep the backend key provisioning contract documented anywhere `TRUSTSIGNAL_API_KEY` is referenced.
+- Publish and maintain a stable `v0` major tag once release management is finalized.
