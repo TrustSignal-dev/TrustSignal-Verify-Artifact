@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+env:
+  TRUSTSIGNAL_API_KEY: ${{ secrets.TRUSTSIGNAL_API_KEY }}
+
 jobs:
   local-receipt-demo:
     name: "Local Receipt Demo"
@@ -78,24 +81,29 @@ jobs:
   managed-live-demo:
     name: "Managed Mode (Live API)"
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'workflow_dispatch' && secrets.TRUSTSIGNAL_API_KEY != '' }}
     steps:
       - uses: actions/checkout@v4
+      - name: Skip managed demo when secret is unavailable
+        if: ${{ github.event_name != 'workflow_dispatch' || env.TRUSTSIGNAL_API_KEY == '' }}
+        run: echo "Skipping managed live demo because this is not a manual run or TRUSTSIGNAL_API_KEY is not configured."
       - name: Create managed demo artifact
+        if: ${{ github.event_name == 'workflow_dispatch' && env.TRUSTSIGNAL_API_KEY != '' }}
         run: |
           mkdir -p demo
           printf 'TrustSignal managed demo artifact\n' > demo/managed.txt
 
       - name: Verify artifact with TrustSignal
         id: trustsignal
+        if: ${{ github.event_name == 'workflow_dispatch' && env.TRUSTSIGNAL_API_KEY != '' }}
         uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.0
         with:
           mode: managed
           api_base_url: https://api.trustsignal.dev
-          api_key: ${{ secrets.TRUSTSIGNAL_API_KEY }}
+          api_key: ${{ env.TRUSTSIGNAL_API_KEY }}
           path: demo/managed.txt
           upload_receipt: "false"
       - name: Verify outputs
+        if: ${{ github.event_name == 'workflow_dispatch' && env.TRUSTSIGNAL_API_KEY != '' }}
         run: |
           echo "SHA256: ${{ steps.trustsignal.outputs.sha256 }}"
           echo "Receipt: ${{ steps.trustsignal.outputs.receipt_path }}"
