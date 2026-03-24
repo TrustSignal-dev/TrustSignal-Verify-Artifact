@@ -1,0 +1,45 @@
+name: Live Test Report
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 6 * * *"
+
+env:
+  TRUSTSIGNAL_API_KEY: ${{ secrets.TRUSTSIGNAL_API_KEY }}
+
+jobs:
+  live-test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Skip live test when secret is unavailable
+        if: ${{ env.TRUSTSIGNAL_API_KEY == '' }}
+        run: echo "Skipping live test because TRUSTSIGNAL_API_KEY is not configured."
+
+      - name: Create artifact
+        if: ${{ env.TRUSTSIGNAL_API_KEY != '' }}
+        run: |
+          mkdir -p dist
+          printf 'manual live test artifact\n' > dist/manual-live-test.txt
+
+      - name: Verify against production API
+        id: trustsignal
+        if: ${{ env.TRUSTSIGNAL_API_KEY != '' }}
+        uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.0
+        with:
+          mode: managed
+          path: dist/manual-live-test.txt
+          api_base_url: https://api.trustsignal.dev
+          api_key: ${{ env.TRUSTSIGNAL_API_KEY }}
+          upload_receipt: "false"
+          source: github-actions-manual-live
+
+      - name: Print managed outputs
+        if: ${{ env.TRUSTSIGNAL_API_KEY != '' }}
+        run: |
+          echo "verification_status=${{ steps.trustsignal.outputs.verification_status }}"
+          echo "verification_id=${{ steps.trustsignal.outputs.verification_id }}"
+          echo "receipt_id=${{ steps.trustsignal.outputs.receipt_id }}"

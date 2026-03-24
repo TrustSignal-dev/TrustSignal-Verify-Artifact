@@ -17,7 +17,13 @@ function jsonResponse(status, body) {
 global.fetch = async function mockFetch(url, options = {}) {
   const parsedUrl = new URL(url);
   const apiKey = options.headers && (options.headers['x-api-key'] || options.headers['X-API-Key']);
-  if (apiKey !== 'test-key') {
+  const healthStatus = Number(process.env.MOCK_HEALTH_STATUS || '200');
+  
+  if (parsedUrl.pathname === '/health') {
+    return jsonResponse(healthStatus, { status: healthStatus >= 200 && healthStatus < 300 ? 'ok' : 'down' });
+  }
+
+  if (apiKey !== 'test-key' && !apiKey?.startsWith('secret-')) {
     return jsonResponse(403, { error: 'Forbidden: invalid API key' });
   }
 
@@ -25,21 +31,15 @@ global.fetch = async function mockFetch(url, options = {}) {
     const payload = JSON.parse(options.body || '{}');
     const receiptId = process.env.MOCK_RECEIPT_ID || '00000000-0000-4000-8000-000000000001';
     const verificationId = process.env.MOCK_VERIFICATION_ID || `verify-${receiptId}`;
-    const validHash = process.env.MOCK_VALID_ARTIFACT_HASH || sha256('valid artifact');
-    const isValid =
-      payload?.artifact?.hash === validHash &&
-      payload?.artifact?.algorithm === 'sha256' &&
-      payload?.source?.provider === 'local-test' &&
-      payload?.source?.repository === 'trustsignal-dev/trustsignal-verify-artifact' &&
-      payload?.source?.workflow === 'Artifact Verification' &&
-      payload?.source?.runId === '12345' &&
-      payload?.source?.actor === 'octocat' &&
-      payload?.source?.commit === 'abc123def456' &&
-      typeof payload?.metadata?.artifactPath === 'string';
+    const responseStatus = Number(process.env.MOCK_VERIFY_HTTP_STATUS || '200');
+    
+    const defaultValid = !!(payload?.artifact?.hash && payload?.source?.repository);
+    const isValid = process.env.MOCK_VALID ? process.env.MOCK_VALID === 'true' : defaultValid;
+    const status = process.env.MOCK_STATUS || (isValid ? 'verified' : 'invalid');
 
-    return jsonResponse(200, {
+    return jsonResponse(responseStatus, {
       verification_id: verificationId,
-      status: isValid ? 'verified' : 'invalid',
+      status,
       receipt_id: receiptId,
       receipt_signature: `sig-${receiptId}`,
       valid: isValid

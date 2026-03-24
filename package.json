@@ -11,11 +11,19 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "mkdir -p dist && cp src/index.js dist/index.js",
+    "build": "ncc build src/index.js -o dist --minify --no-cache",
     "package": "npm run build",
-    "check": "node --check src/index.js && node --check dist/index.js",
-    "test:local": "node scripts/test-local.js",
-    "validate:local": "npm run check && npm run test:local"
+    "check": "node --check src/index.js",
+    "test:hygiene": "npm run build && node scripts/test-hygiene.js",
+    "test:local": "npm run build && node scripts/test-local.js",
+    "validate:dist:ci": "npm run build && git diff --exit-code -- dist/index.js",
+    "validate:local": "npm run check && npm run test:hygiene && npm run test:local"
+  },
+  "dependencies": {
+    "@actions/artifact": "^2.1.1"
+  },
+  "devDependencies": {
+    "@vercel/ncc": "^0.38.1"
   },
   "keywords": [
     "github-action",

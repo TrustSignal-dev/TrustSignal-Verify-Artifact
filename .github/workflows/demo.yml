@@ -1,126 +1,118 @@
 name: TrustSignal Action Demo
 
-# Trigger this workflow manually from the Actions tab to watch a live demo run.
-# The demo uses the built-in local test harness so no live API credentials are needed.
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
+env:
+  TRUSTSIGNAL_API_KEY: ${{ secrets.TRUSTSIGNAL_API_KEY }}
+
 jobs:
-  # ─── Scenario 1: Verify an artifact file (hash computed by the action) ────────
-  demo-artifact-path:
-    name: "Demo: verify artifact file"
+  local-receipt-demo:
+    name: "Local Receipt Demo"
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - name: Build release archive
+        run: |
+          mkdir -p build/release
+          cp README.md build/release/README.md
+          cp action.yml build/release/action.yml
+          tar -czf build/trustsignal-verify-artifact.tgz -C build/release .
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - name: Generate baseline receipt
+        id: baseline
+        uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.0
         with:
-          node-version: "20"
+          mode: local
+          path: build/trustsignal-verify-artifact.tgz
+          upload_receipt: "false"
 
-      - name: Create demo artifact
+      - name: Verify artifact against saved receipt
+        id: verify
+        uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.0
+        with:
+          mode: local
+          path: build/trustsignal-verify-artifact.tgz
+          receipt: ${{ steps.baseline.outputs.receipt_path }}
+          upload_receipt: "false"
+
+      - name: Show local demo outputs
         run: |
-          mkdir -p dist
-          printf 'valid artifact' > dist/demo.txt
-          echo "Artifact content written to dist/demo.txt"
-          echo "SHA-256 (for reference): $(sha256sum dist/demo.txt | cut -d' ' -f1)"
+          echo "baseline_sha256=${{ steps.baseline.outputs.sha256 }}"
+          echo "baseline_receipt=${{ steps.baseline.outputs.receipt_path }}"
+          echo "verification_status=${{ steps.verify.outputs.verification_status }}"
 
-      - name: Run local test harness (simulates live API call)
-        run: node scripts/test-local.js
-
-      - name: Show what a live action step looks like
-        run: |
-          echo "──────────────────────────────────────────────────────────"
-          echo "  In a real workflow the step below calls the TrustSignal"
-          echo "  API and returns signed receipt metadata:"
-          echo ""
-          echo "  - name: Verify artifact with TrustSignal"
-          echo "    id: trustsignal"
-          echo "    uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.0"
-          echo "    with:"
-          echo "      api_base_url: https://api.trustsignal.dev"
-          echo "      api_key: \${{ secrets.TRUSTSIGNAL_API_KEY }}"
-          echo "      artifact_path: dist/demo.txt"
-          echo "      source: github-actions"
-          echo "      fail_on_mismatch: \"true\""
-          echo "──────────────────────────────────────────────────────────"
-
-  # ─── Scenario 2: Verify a precomputed SHA-256 digest ─────────────────────────
-  demo-artifact-hash:
-    name: "Demo: verify precomputed hash"
+  drift-detection-demo:
+    name: "Drift Detection Demo"
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Show what a hash-based verification step looks like
+      - uses: actions/checkout@v4
+      - name: Build release archive
         run: |
-          echo "──────────────────────────────────────────────────────────"
-          echo "  Hash-based verification (no file needed at runtime):"
-          echo ""
-          echo "  - name: Verify known digest with TrustSignal"
-          echo "    id: trustsignal"
-          echo "    uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.0"
-          echo "    with:"
-          echo "      api_base_url: https://api.trustsignal.dev"
-          echo "      api_key: \${{ secrets.TRUSTSIGNAL_API_KEY }}"
-          echo "      artifact_hash: 2f77668a9dfbf8d5847cf2d5d0370740e0c0601b4f061c1181f58c77c2b8f486"
-          echo "      source: github-actions"
-          echo "      fail_on_mismatch: \"true\""
-          echo "──────────────────────────────────────────────────────────"
+          mkdir -p build/drift
+          cp README.md build/drift/README.md
+          cp action.yml build/drift/action.yml
+          tar -czf build/trustsignal-drift-check.tgz -C build/drift .
 
-      - name: Run local test harness (simulates live API call)
-        run: node scripts/test-local.js
-
-  # ─── Scenario 3: Show action outputs ─────────────────────────────────────────
-  demo-outputs:
-    name: "Demo: action outputs"
-    runs-on: ubuntu-latest
-    needs: [demo-artifact-path, demo-artifact-hash]
-    permissions:
-      contents: read
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - name: Generate baseline receipt
+        id: baseline
+        uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.0
         with:
-          node-version: "20"
+          mode: local
+          path: build/trustsignal-drift-check.tgz
+          upload_receipt: "false"
 
-      - name: Simulate action outputs
+      - name: Mutate release archive contents
+        run: |
+          printf 'tampered\n' > build/drift/MUTATED.txt
+          tar -czf build/trustsignal-drift-check.tgz -C build/drift .
+
+      - name: Verify drift is detected
+        id: drift
+        continue-on-error: true
+        uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.0
+        with:
+          mode: local
+          path: build/trustsignal-drift-check.tgz
+          receipt: ${{ steps.baseline.outputs.receipt_path }}
+          upload_receipt: "false"
+
+      - name: Assert drift detection fired
+        run: |
+          test "${{ steps.drift.outcome }}" = "failure"
+
+  managed-live-demo:
+    name: "Managed Mode (Live API)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Skip managed demo when secret is unavailable
+        if: ${{ github.event_name != 'workflow_dispatch' || env.TRUSTSIGNAL_API_KEY == '' }}
+        run: echo "Skipping managed live demo because this is not a manual run or TRUSTSIGNAL_API_KEY is not configured."
+      - name: Build managed release archive
+        if: ${{ github.event_name == 'workflow_dispatch' && env.TRUSTSIGNAL_API_KEY != '' }}
+        run: |
+          mkdir -p build/managed
+          cp README.md build/managed/README.md
+          cp action.yml build/managed/action.yml
+          tar -czf build/trustsignal-managed-release.tgz -C build/managed .
+
+      - name: Verify artifact with TrustSignal
         id: trustsignal
+        if: ${{ github.event_name == 'workflow_dispatch' && env.TRUSTSIGNAL_API_KEY != '' }}
+        uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.0
+        with:
+          mode: managed
+          api_base_url: https://api.trustsignal.dev
+          api_key: ${{ env.TRUSTSIGNAL_API_KEY }}
+          path: build/trustsignal-managed-release.tgz
+          upload_receipt: "false"
+      - name: Verify outputs
+        if: ${{ github.event_name == 'workflow_dispatch' && env.TRUSTSIGNAL_API_KEY != '' }}
         run: |
-          # Simulate what the action writes to GITHUB_OUTPUT
-          echo "verification_id=verify-00000000-0000-4000-8000-000000000001" >> "$GITHUB_OUTPUT"
-          echo "status=verified" >> "$GITHUB_OUTPUT"
-          echo "receipt_id=00000000-0000-4000-8000-000000000001" >> "$GITHUB_OUTPUT"
-          echo "receipt_signature=sig-00000000-0000-4000-8000-000000000001" >> "$GITHUB_OUTPUT"
-
-      - name: Display verification outputs
-        run: |
-          echo "──────────────────────────────────────────────────────────"
-          echo "  TrustSignal Verify Artifact — outputs"
-          echo "──────────────────────────────────────────────────────────"
-          echo "  verification_id : ${{ steps.trustsignal.outputs.verification_id }}"
-          echo "  status          : ${{ steps.trustsignal.outputs.status }}"
-          echo "  receipt_id      : ${{ steps.trustsignal.outputs.receipt_id }}"
-          echo "  receipt_signature: ${{ steps.trustsignal.outputs.receipt_signature }}"
-          echo "──────────────────────────────────────────────────────────"
-          echo ""
-          echo "  Persist the receipt_id and receipt_signature for later"
-          echo "  verification or audit workflows."
-          echo "──────────────────────────────────────────────────────────"
+          echo "SHA256: ${{ steps.trustsignal.outputs.sha256 }}"
+          echo "Receipt: ${{ steps.trustsignal.outputs.receipt_path }}"
+          echo "Receipt ID: ${{ steps.trustsignal.outputs.receipt_id }}"
+          echo "Status: ${{ steps.trustsignal.outputs.verification_status }}"
