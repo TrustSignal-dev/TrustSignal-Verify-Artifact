@@ -46,7 +46,7 @@ Then run it from the GitHub Actions UI:
 
 Passing example run:
 
-- [TrustSignal Action Demo #23471497658](https://github.com/TrustSignal-dev/TrustSignal-Verify-Artifact/actions/runs/23471497658)
+- [TrustSignal Action Demo #23472323481](https://github.com/TrustSignal-dev/TrustSignal-Verify-Artifact/actions/runs/23472323481)
 
 ### What each job proves
 

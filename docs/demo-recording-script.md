@@ -21,7 +21,7 @@ Have these ready:
 - `.github/workflows/demo.yml` open in another tab
 - `https://api.trustsignal.dev/health` ready in another tab
 - the passing example run available:
-  - `https://github.com/TrustSignal-dev/TrustSignal-Verify-Artifact/actions/runs/23471497658`
+  - `https://github.com/TrustSignal-dev/TrustSignal-Verify-Artifact/actions/runs/23472323481`
 
 Confirm:
 
@@ -71,7 +71,7 @@ Duration:
 
 What to do:
 
-- show the queued or in-progress run screen
+- show the completed run summary with all three jobs visible
 
 Say:
 
