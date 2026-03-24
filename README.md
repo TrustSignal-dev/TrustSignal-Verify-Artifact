@@ -4,7 +4,17 @@
 
 GitHub Action for hashing build artifacts, creating offline verification receipts, and calling the TrustSignal managed verification API.
 
+If you want a plain-English walkthrough that mirrors the TrustSignal onboarding deck but uses the real inputs and outputs from this repository, start with [docs/plain-english-setup.md](docs/plain-english-setup.md).
+
 ## Quickstart
+
+The shortest path is:
+
+1. Add a repository secret named `TRUSTSIGNAL_API_KEY`.
+2. Create `.github/workflows/verify.yml`.
+3. Build a real artifact in the workflow.
+4. Add the TrustSignal action step.
+5. Run the workflow and inspect `verification_status`, `receipt_id`, and `verification_id`.
 
 Create `.github/workflows/verify.yml`:
 
@@ -125,6 +135,8 @@ The repository also includes a nightly `Live Test Report` workflow that invokes 
 Additional operator notes are in [docs/live-test.md](docs/live-test.md).
 
 For a polished walkthrough that covers both the action demo and the live TrustSignal API/app demo flow, see [docs/how-to-demo-guide.md](docs/how-to-demo-guide.md).
+
+For the same setup explained in plain English, including "action vs app" guidance, see [docs/plain-english-setup.md](docs/plain-english-setup.md).
 
 For a portable MDX asset that can be dropped into a Code Hike-style docs site, see [docs/codehike-demo.mdx](docs/codehike-demo.mdx).
 
