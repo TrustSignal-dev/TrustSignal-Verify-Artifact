@@ -180,6 +180,6 @@ Use these repo assets when editing the video or building the docs version:
 - [codehike-demo-annotated.mdx](./codehike-demo-annotated.mdx)
 - [how-to-demo-guide.md](./how-to-demo-guide.md)
 - [workflow-dispatch.png](./demo-assets/workflow-dispatch.png)
-- [run-queued.png](./demo-assets/run-queued.png)
+- [run-summary-success.png](./demo-assets/run-summary-success.png)
 - [local-demo-success.png](./demo-assets/local-demo-success.png)
 - [managed-job-details.png](./demo-assets/managed-job-details.png)
