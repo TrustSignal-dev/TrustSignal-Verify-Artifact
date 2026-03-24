@@ -4,6 +4,9 @@
 
 GitHub Action for hashing build artifacts, creating offline verification receipts, and calling the TrustSignal managed verification API.
 
+Deck:
+[TrustSignal: Your File Integrity Sidekick (PDF)](docs/wiki/TrustSignal_Your_File_Integrity_Sidekick.pdf)
+
 If you want a plain-English walkthrough that mirrors the TrustSignal onboarding deck but uses the real inputs and outputs from this repository, start with [docs/plain-english-setup.md](docs/plain-english-setup.md).
 
 ## Quickstart
@@ -30,25 +33,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build demo artifact
+      - name: Build release archive
         run: |
-          mkdir -p dist
-          echo "release bundle v1" > dist/release.txt
+          mkdir -p build/package
+          cp README.md build/package/README.md
+          tar -czf build/trustsignal-demo-release.tgz -C build/package .
 
       - name: Create local receipt
         id: baseline
         uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.0
         with:
           mode: local
-          path: dist/release.txt
+          path: build/trustsignal-demo-release.tgz
 
       - name: Verify against the saved receipt
         uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.0
         with:
           mode: local
-          path: dist/release.txt
+          path: build/trustsignal-demo-release.tgz
           receipt: ${{ steps.baseline.outputs.receipt_path }}
 ```
+
+That example proves the offline path first: generate a receipt for a real release archive, then verify the same archive against the saved receipt without another API call.
 
 ## Managed Mode
 
@@ -60,9 +66,20 @@ Managed mode sends the artifact hash and GitHub run metadata to TrustSignal.
   uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.0
   with:
     mode: managed
-    path: dist/release.txt
+    path: build/trustsignal-demo-release.tgz
     api_base_url: https://api.trustsignal.dev
     api_key: ${{ secrets.TRUSTSIGNAL_API_KEY }}
+```
+
+Typical follow-up step:
+
+```yaml
+- name: Show managed verification outputs
+  run: |
+    echo "SHA256: ${{ steps.trustsignal.outputs.sha256 }}"
+    echo "Status: ${{ steps.trustsignal.outputs.verification_status }}"
+    echo "Receipt ID: ${{ steps.trustsignal.outputs.receipt_id }}"
+    echo "Verification ID: ${{ steps.trustsignal.outputs.verification_id }}"
 ```
 
 Managed mode requires two things to agree:
