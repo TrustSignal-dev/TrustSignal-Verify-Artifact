@@ -149,6 +149,8 @@ The repository CI includes a guarded `Live Managed Validation` job that runs on 
 
 The repository also includes a nightly `Live Test Report` workflow that invokes the published `TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.0` action against the production API. The badge at the top of this README points to that workflow.
 
+That nightly workflow now builds and verifies a real `.tgz` release archive so the live validation path matches the demo workflow instead of using a placeholder text artifact.
+
 Additional operator notes are in [docs/live-test.md](docs/live-test.md).
 
 For a polished walkthrough that covers both the action demo and the live TrustSignal API/app demo flow, see [docs/how-to-demo-guide.md](docs/how-to-demo-guide.md).

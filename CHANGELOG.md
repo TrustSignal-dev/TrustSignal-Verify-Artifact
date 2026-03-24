@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and 
 
 ## [Unreleased]
 
+### Changed
+
+- JavaScript action runtime updated from `node20` to `node24` to stay ahead of the GitHub Actions Node 20 deprecation window.
+- Nightly live validation now builds and verifies a real `.tgz` release archive so the production validation path matches the demo workflow.
+
 ## [0.2.0] - 2026-03-16
 
 ### Changed

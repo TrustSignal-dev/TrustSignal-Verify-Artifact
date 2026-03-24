@@ -22,8 +22,10 @@ jobs:
       - name: Create artifact
         if: ${{ env.TRUSTSIGNAL_API_KEY != '' }}
         run: |
-          mkdir -p dist
-          printf 'manual live test artifact\n' > dist/manual-live-test.txt
+          mkdir -p build/live
+          cp README.md build/live/README.md
+          cp action.yml build/live/action.yml
+          tar -czf build/trustsignal-live-test-release.tgz -C build/live .
 
       - name: Verify against production API
         id: trustsignal
@@ -31,7 +33,7 @@ jobs:
         uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.0
         with:
           mode: managed
-          path: dist/manual-live-test.txt
+          path: build/trustsignal-live-test-release.tgz
           api_base_url: https://api.trustsignal.dev
           api_key: ${{ env.TRUSTSIGNAL_API_KEY }}
           upload_receipt: "false"
@@ -40,6 +42,7 @@ jobs:
       - name: Print managed outputs
         if: ${{ env.TRUSTSIGNAL_API_KEY != '' }}
         run: |
+          echo "sha256=${{ steps.trustsignal.outputs.sha256 }}"
           echo "verification_status=${{ steps.trustsignal.outputs.verification_status }}"
           echo "verification_id=${{ steps.trustsignal.outputs.verification_id }}"
           echo "receipt_id=${{ steps.trustsignal.outputs.receipt_id }}"

@@ -35,8 +35,10 @@ After changing backend environment variables, redeploy the API service before re
 
 ## Expected Results
 
+- The workflow builds a real `.tgz` release archive on a GitHub-hosted runner before verification.
 - The action step completes on a GitHub-hosted runner.
 - `verification_status` is `verified`.
+- `sha256` is populated for the archive that was verified.
 - `receipt_id` is populated.
 - `verification_id` is populated when the API returns it.
 
@@ -44,3 +46,4 @@ After changing backend environment variables, redeploy the API service before re
 
 - Local validation still uses the repository mock fetch harness. That keeps unit-style coverage deterministic.
 - Live validation is intentionally gated behind a secret so pull requests and forks do not attempt production API calls.
+- The nightly workflow now mirrors the demo flow by verifying a real archive instead of a placeholder text file.
