@@ -25,8 +25,13 @@
     "repository": "<repo>",
     "workflow": "<workflow>",
     "runId": "<runId>",
+    "runNumber": "<runNumber>",
+    "job": "<job>",
     "commit": "<sha>",
-    "actor": "<actor>"
+    "actor": "<actor>",
+    "ref": "<ref>",
+    "refName": "<refName>",
+    "eventName": "<eventName>"
   },
   "metadata": {
     "artifactPath": "<optional>"

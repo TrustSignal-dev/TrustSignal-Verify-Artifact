@@ -5,6 +5,7 @@ on:
     branches: ["**"]
   pull_request:
     branches: ["**"]
+  workflow_dispatch:
 
 jobs:
   test:
@@ -20,8 +21,40 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Build
-        run: npm run build
+      - name: Install dependencies
+        run: npm ci
 
       - name: Validate
-        run: npm run validate:local
+        run: |
+          npm run validate:local
+          npm run validate:dist:ci
+
+  live-managed-validation:
+    name: Live Managed Validation
+    if: ${{ github.event_name != 'pull_request' && secrets.TRUSTSIGNAL_API_KEY != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create live test artifact
+        run: |
+          mkdir -p dist
+          printf 'trustsignal live managed validation\n' > dist/live-managed.txt
+
+      - name: Verify against api.trustsignal.dev
+        id: trustsignal
+        uses: ./
+        with:
+          mode: managed
+          path: dist/live-managed.txt
+          api_base_url: https://api.trustsignal.dev
+          api_key: ${{ secrets.TRUSTSIGNAL_API_KEY }}
+          upload_receipt: "false"
+          source: github-actions-live
+
+      - name: Assert managed outputs
+        run: |
+          test "${{ steps.trustsignal.outputs.verification_status }}" = "verified"
+          test -n "${{ steps.trustsignal.outputs.receipt_id }}"

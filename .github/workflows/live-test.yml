@@ -1,0 +1,37 @@
+name: Live Test Report
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 6 * * *"
+
+jobs:
+  live-test:
+    if: ${{ secrets.TRUSTSIGNAL_API_KEY != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create artifact
+        run: |
+          mkdir -p dist
+          printf 'manual live test artifact\n' > dist/manual-live-test.txt
+
+      - name: Verify against production API
+        id: trustsignal
+        uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.0
+        with:
+          mode: managed
+          path: dist/manual-live-test.txt
+          api_base_url: https://api.trustsignal.dev
+          api_key: ${{ secrets.TRUSTSIGNAL_API_KEY }}
+          upload_receipt: "false"
+          source: github-actions-manual-live
+
+      - name: Print managed outputs
+        run: |
+          echo "verification_status=${{ steps.trustsignal.outputs.verification_status }}"
+          echo "verification_id=${{ steps.trustsignal.outputs.verification_id }}"
+          echo "receipt_id=${{ steps.trustsignal.outputs.receipt_id }}"

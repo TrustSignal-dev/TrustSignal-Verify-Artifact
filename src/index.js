@@ -1,6 +1,7 @@
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
+const { DefaultArtifactClient } = require('@actions/artifact');
 
 const FETCH_TIMEOUT_MS = 30000;
 
@@ -30,36 +31,72 @@ function getBooleanInput(name, defaultValue = false) {
 function setOutput(name, value) {
   const outputPath = process.env.GITHUB_OUTPUT;
   if (!outputPath) {
-    process.stdout.write(`${name}=${value}\n`);
+    process.stdout.write(`${name}=${String(value ?? '')}\n`);
     return;
   }
 
   fs.appendFileSync(outputPath, `${name}=${String(value ?? '')}\n`, 'utf8');
 }
 
+function sanitizeErrorMessage(message) {
+  return String(message).replace(/[A-Za-z0-9_-]{24,}/g, '***');
+}
+
 function setFailed(message) {
-  process.stderr.write(`::error::${message}\n`);
+  process.stderr.write(`::error::${sanitizeErrorMessage(message)}\n`);
   process.exitCode = 1;
 }
 
 function sha256File(filePath) {
-  const absolutePath = path.resolve(filePath);
+  const hash = crypto.createHash('sha256');
+  const fileBuffer = fs.readFileSync(filePath);
+  hash.update(fileBuffer);
+  return hash.digest('hex');
+}
+
+function getAllFiles(dirPath, files = []) {
+  for (const file of fs.readdirSync(dirPath)) {
+    const fullPath = path.join(dirPath, file);
+    const stats = fs.statSync(fullPath);
+
+    if (stats.isDirectory()) {
+      if (!['.git', 'node_modules', '.trustsignal'].includes(file)) {
+        getAllFiles(fullPath, files);
+      }
+      continue;
+    }
+
+    files.push(fullPath);
+  }
+
+  return files;
+}
+
+function hashPath(targetPath) {
+  const absolutePath = path.resolve(targetPath);
   if (!fs.existsSync(absolutePath)) {
-    throw new Error(`Artifact file not found: ${absolutePath}`);
+    throw new Error(`Path not found: ${absolutePath}`);
   }
 
   const stats = fs.statSync(absolutePath);
-  if (!stats.isFile()) {
-    throw new Error(`Artifact path is not a file: ${absolutePath}`);
+  if (stats.isFile()) {
+    return sha256File(absolutePath);
   }
 
-  return new Promise((resolve, reject) => {
+  if (stats.isDirectory()) {
+    const files = getAllFiles(absolutePath).sort();
     const hash = crypto.createHash('sha256');
-    const stream = fs.createReadStream(absolutePath);
-    stream.on('data', (chunk) => hash.update(chunk));
-    stream.on('end', () => resolve(hash.digest('hex')));
-    stream.on('error', reject);
-  });
+
+    for (const file of files) {
+      const relativePath = path.relative(absolutePath, file);
+      const fileHash = sha256File(file);
+      hash.update(`${relativePath}:${fileHash}\n`);
+    }
+
+    return hash.digest('hex');
+  }
+
+  throw new Error(`Unsupported path type: ${absolutePath}`);
 }
 
 function validateHash(value) {
@@ -79,8 +116,8 @@ function normalizeBaseUrl(value) {
     throw new Error('api_base_url must be a valid URL');
   }
 
-  if (!/^https?:$/.test(url.protocol)) {
-    throw new Error('api_base_url must use http or https');
+  if (url.protocol !== 'https:') {
+    throw new Error('api_base_url must use https');
   }
 
   url.pathname = url.pathname.replace(/\/+$/, '') || '/';
@@ -93,14 +130,19 @@ function getGitHubContext() {
   return {
     repository: process.env.GITHUB_REPOSITORY || undefined,
     runId: process.env.GITHUB_RUN_ID || undefined,
+    runNumber: process.env.GITHUB_RUN_NUMBER || undefined,
     workflow: process.env.GITHUB_WORKFLOW || undefined,
+    job: process.env.GITHUB_JOB || undefined,
     actor: process.env.GITHUB_ACTOR || undefined,
-    sha: process.env.GITHUB_SHA || undefined
+    sha: process.env.GITHUB_SHA || undefined,
+    ref: process.env.GITHUB_REF || undefined,
+    refName: process.env.GITHUB_REF_NAME || undefined,
+    eventName: process.env.GITHUB_EVENT_NAME || undefined
   };
 }
 
 function omitUndefined(obj) {
-  return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined));
+  return Object.fromEntries(Object.entries(obj).filter(([, value]) => value !== undefined));
 }
 
 function buildVerificationRequest({ artifactHash, artifactPath, source }) {
@@ -117,46 +159,93 @@ function buildVerificationRequest({ artifactHash, artifactPath, source }) {
       repository: github.repository,
       workflow: github.workflow,
       runId: github.runId,
+      runNumber: github.runNumber,
+      job: github.job,
       actor: github.actor,
-      commit: github.sha
+      commit: github.sha,
+      ref: github.ref,
+      refName: github.refName,
+      eventName: github.eventName
     }),
-    metadata: {
-      ...(artifactPath ? { artifactPath } : {})
-    }
+    metadata: artifactPath ? { artifactPath } : {}
   };
 }
 
-function deriveStatus(responseBody) {
-  if (typeof responseBody.status === 'string' && responseBody.status) {
-    return responseBody.status;
+async function callHealthApi(apiBaseUrl) {
+  try {
+    const response = await fetch(`${apiBaseUrl}/health`);
+    return response.ok;
+  } catch {
+    return false;
   }
-  return (
-    responseBody.verificationStatus ||
-    responseBody.result ||
-    (responseBody.verified === true ? 'verified' : undefined) ||
-    (responseBody.valid === true ? 'verified' : undefined) ||
-    (responseBody.match === true ? 'verified' : undefined) ||
-    'unknown'
-  );
 }
 
-function extractReceiptSignature(responseBody) {
-  if (typeof responseBody.receipt_signature === 'string') {
-    return responseBody.receipt_signature;
+async function parseJsonResponse(response) {
+  const rawBody = await response.text();
+  if (!rawBody) return {};
+
+  try {
+    return JSON.parse(rawBody);
+  } catch {
+    throw new Error(`TrustSignal API returned a non-JSON response with status ${response.status}`);
+  }
+}
+
+async function callVerificationApi({ apiBaseUrl, apiKey, artifactHash, artifactPath, source }) {
+  const endpoint = `${apiBaseUrl}/api/v1/verify`;
+  const payload = buildVerificationRequest({ artifactHash, artifactPath, source });
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+  let response;
+  try {
+    response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json',
+        'x-api-key': apiKey
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+  } catch (error) {
+    if (error && error.name === 'AbortError') {
+      throw new Error(`TrustSignal API request timed out after ${FETCH_TIMEOUT_MS / 1000}s`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
   }
 
-  if (typeof responseBody.receiptSignature === 'string') {
-    return responseBody.receiptSignature;
+  const responseBody = await parseJsonResponse(response);
+  if (!response.ok) {
+    const message = responseBody.error || responseBody.message || '';
+    throw new Error(`TrustSignal API request failed with status ${response.status}${message ? `: ${message}` : ''}`);
   }
 
-  if (
-    responseBody.receiptSignature &&
-    typeof responseBody.receiptSignature.signature === 'string'
-  ) {
-    return responseBody.receiptSignature.signature;
+  return responseBody;
+}
+
+function deriveStatus(responseBody) {
+  if (typeof responseBody.status === 'string' && responseBody.status.trim()) {
+    return responseBody.status.trim();
   }
 
-  return '';
+  if (typeof responseBody.verificationStatus === 'string' && responseBody.verificationStatus.trim()) {
+    return responseBody.verificationStatus.trim();
+  }
+
+  if (responseBody.valid === true || responseBody.verified === true || responseBody.match === true) {
+    return 'verified';
+  }
+
+  if (responseBody.valid === false || responseBody.verified === false || responseBody.match === false) {
+    return 'invalid';
+  }
+
+  return 'unknown';
 }
 
 function isVerificationValid(responseBody, status) {
@@ -180,127 +269,289 @@ function isVerificationValid(responseBody, status) {
   return false;
 }
 
-function extractMessage(responseBody) {
-  if (!responseBody || typeof responseBody !== 'object') {
-    return '';
+function extractReceiptSignature(responseBody) {
+  if (typeof responseBody.receipt_signature === 'string') {
+    return responseBody.receipt_signature;
   }
 
-  return (
-    responseBody.error ||
-    responseBody.message ||
-    responseBody.detail ||
-    responseBody.title ||
-    ''
-  );
+  if (typeof responseBody.receiptSignature === 'string') {
+    return responseBody.receiptSignature;
+  }
+
+  if (responseBody.receiptSignature && typeof responseBody.receiptSignature.signature === 'string') {
+    return responseBody.receiptSignature.signature;
+  }
+
+  return '';
 }
 
-async function parseJsonResponse(response) {
-  const rawBody = await response.text();
-  if (!rawBody) {
-    return {};
-  }
-
-  try {
-    return JSON.parse(rawBody);
-  } catch {
-    throw new Error(`TrustSignal API returned a non-JSON response with status ${response.status}`);
-  }
+function parseReceiptMetadata(receiptPayload) {
+  return {
+    receiptId: receiptPayload?.receipt_id || receiptPayload?.receiptId || receiptPayload?.id || '',
+    receiptSignature:
+      receiptPayload?.receipt_signature ||
+      receiptPayload?.receiptSignature?.signature ||
+      receiptPayload?.receiptSignature ||
+      ''
+  };
 }
 
-async function callVerificationApi({ apiBaseUrl, apiKey, artifactHash, artifactPath, source }) {
-  const endpoint = `${apiBaseUrl}/api/v1/verify`;
-  const payload = buildVerificationRequest({ artifactHash, artifactPath, source });
+function extractReceiptArtifactHash(receiptPayload) {
+  const candidates = [
+    receiptPayload?.artifact_hash,
+    receiptPayload?.artifactHash,
+    receiptPayload?.artifact?.hash,
+    receiptPayload?.artifact?.sha256,
+    receiptPayload?.sha256,
+    receiptPayload?.fingerprint,
+    receiptPayload?.hash
+  ];
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-
-  let response;
-  try {
-    response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'accept': 'application/json',
-        'x-api-key': apiKey
-      },
-      body: JSON.stringify(payload),
-      signal: controller.signal
-    });
-  } catch (err) {
-    if (err && err.name === 'AbortError') {
-      throw new Error(`TrustSignal API request timed out after ${FETCH_TIMEOUT_MS / 1000}s`);
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return validateHash(candidate.trim());
     }
-    throw err;
-  } finally {
-    clearTimeout(timer);
   }
 
-  const responseBody = await parseJsonResponse(response);
+  throw new Error('receipt did not include an artifact hash');
+}
 
-  if (!response.ok) {
-    const message = extractMessage(responseBody);
-    throw new Error(
-      `TrustSignal API request failed with status ${response.status}${
-        message ? `: ${message}` : ''
-      }`
+function loadReceiptInput(receiptInput) {
+  const trimmed = receiptInput.trim();
+  if (!trimmed) {
+    throw new Error('receipt input was empty');
+  }
+
+  const possiblePath = path.resolve(trimmed);
+  if (fs.existsSync(possiblePath)) {
+    const raw = fs.readFileSync(possiblePath, 'utf8');
+    let parsed;
+
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      throw new Error(`Receipt file is not valid JSON: ${possiblePath}`);
+    }
+
+    return {
+      absolutePath: possiblePath,
+      receipt: parsed,
+      artifactHash: extractReceiptArtifactHash(parsed)
+    };
+  }
+
+  if (/^[a-f0-9]{64}$/i.test(trimmed) || /^sha256:[a-f0-9]{64}$/i.test(trimmed)) {
+    return {
+      absolutePath: '',
+      receipt: { artifactHash: validateHash(trimmed) },
+      artifactHash: validateHash(trimmed)
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    return {
+      absolutePath: '',
+      receipt: parsed,
+      artifactHash: extractReceiptArtifactHash(parsed)
+    };
+  } catch (error) {
+    throw new Error(`Invalid receipt input: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+function maskSecret(secret) {
+  if (secret && secret.length > 4) {
+    process.stdout.write(`::add-mask::${secret}\n`);
+  }
+}
+
+async function uploadReceiptArtifact(receiptPath) {
+  try {
+    if (!process.env.ACTIONS_RUNTIME_TOKEN && !process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN) {
+      process.stdout.write('Not in GitHub Actions environment, skipping receipt upload.\n');
+      return;
+    }
+
+    const artifactClient = new DefaultArtifactClient();
+    const artifactName = `trustsignal-receipt-${Date.now()}`;
+    await artifactClient.uploadArtifact(
+      artifactName,
+      [receiptPath],
+      path.dirname(receiptPath)
     );
+    process.stdout.write(`Successfully uploaded TrustSignal receipt as artifact: ${artifactName}\n`);
+  } catch (error) {
+    process.stdout.write(`Warning: Failed to upload receipt artifact: ${error.message}\n`);
   }
+}
 
-  return responseBody || {};
+function createReceiptEnvelope({ mode, artifactHash, artifactPath, source, details }) {
+  const github = getGitHubContext();
+
+  return {
+    version: '1.0',
+    mode,
+    artifactHash,
+    artifact: {
+      algorithm: 'sha256',
+      hash: artifactHash
+    },
+    metadata: {
+      ...(artifactPath ? { artifactPath } : {}),
+      source
+    },
+    source: omitUndefined({
+      provider: 'github-actions',
+      repository: github.repository,
+      workflow: github.workflow,
+      runId: github.runId,
+      runNumber: github.runNumber,
+      job: github.job,
+      actor: github.actor,
+      commit: github.sha,
+      ref: github.ref,
+      refName: github.refName,
+      eventName: github.eventName
+    }),
+    timestamp: new Date().toISOString(),
+    ...(details ? { details } : {})
+  };
 }
 
 async function run() {
   try {
-    const apiBaseUrl = normalizeBaseUrl(getInput('api_base_url', { required: true }));
-    const apiKey = getInput('api_key', { required: true });
-    const artifactPath = getInput('artifact_path');
+    const mode = (getInput('mode') || 'local').toLowerCase();
+    if (!['local', 'managed'].includes(mode)) {
+      throw new Error(`Unsupported mode: ${mode}`);
+    }
+
+    const artifactPathInput = getInput('path') || getInput('artifact_path') || '.';
     const providedArtifactHash = getInput('artifact_hash');
+    const receiptInput = getInput('receipt');
     const source = getInput('source') || 'github-actions';
+    const uploadReceipt = getBooleanInput('upload_receipt', true);
     const failOnMismatch = getBooleanInput('fail_on_mismatch', true);
 
-    if (!artifactPath && !providedArtifactHash) {
-      throw new Error('Either artifact_path or artifact_hash must be provided');
+    process.stdout.write(`TrustSignal mode: ${mode}\n`);
+
+    const artifactHash = providedArtifactHash ? validateHash(providedArtifactHash) : hashPath(artifactPathInput);
+    process.stdout.write(`Artifact SHA-256: ${artifactHash}\n`);
+    setOutput('sha256', artifactHash);
+
+    if (mode === 'local' && receiptInput) {
+      const loadedReceipt = loadReceiptInput(receiptInput);
+      const { receiptId, receiptSignature } = parseReceiptMetadata(loadedReceipt.receipt);
+      const matches = artifactHash === loadedReceipt.artifactHash;
+      const verificationStatus = matches ? 'verified' : 'invalid';
+
+      if (loadedReceipt.absolutePath) {
+        process.stdout.write(`Loaded receipt: ${loadedReceipt.absolutePath}\n`);
+      }
+      process.stdout.write(`Receipt expects SHA-256: ${loadedReceipt.artifactHash}\n`);
+
+      setOutput('receipt_path', loadedReceipt.absolutePath);
+      setOutput('mode_used', mode);
+      setOutput('receipt_id', receiptId);
+      setOutput('receipt_signature', receiptSignature);
+      setOutput('verification_status', verificationStatus);
+      setOutput('verification_id', receiptId || 'local-receipt-check');
+      setOutput('status', verificationStatus);
+
+      if (matches) {
+        process.stdout.write('Artifact matches receipt. Integrity verified.\n');
+      } else {
+        process.stdout.write('Artifact drift detected. File no longer matches original receipt.\n');
+        if (failOnMismatch) {
+          throw new Error('Artifact drift detected: artifact does not match receipt');
+        }
+      }
+
+      return;
     }
 
-    if (artifactPath && providedArtifactHash) {
-      throw new Error('Provide only one of artifact_path or artifact_hash');
+    const receiptDir = path.resolve('.trustsignal');
+    fs.mkdirSync(receiptDir, { recursive: true });
+    const receiptPath = path.join(receiptDir, 'receipt.json');
+
+    let receiptId = '';
+    let receiptSignature = '';
+    let verificationId = '';
+    let verificationStatus = 'verified';
+    let receiptData;
+
+    if (mode === 'managed') {
+      const apiBaseUrl = normalizeBaseUrl(getInput('api_base_url', { required: true }));
+      const apiKey = getInput('api_key', { required: true });
+      maskSecret(apiKey);
+
+      process.stdout.write(`Checking TrustSignal API health: ${apiBaseUrl}\n`);
+      const healthy = await callHealthApi(apiBaseUrl);
+      if (!healthy) {
+        throw new Error(`TrustSignal API health check failed at ${apiBaseUrl}`);
+      }
+
+      process.stdout.write('Calling TrustSignal verification API...\n');
+      const responseBody = await callVerificationApi({
+        apiBaseUrl,
+        apiKey,
+        artifactHash,
+        artifactPath: providedArtifactHash ? '' : artifactPathInput,
+        source
+      });
+
+      verificationStatus = deriveStatus(responseBody);
+      const valid = isVerificationValid(responseBody, verificationStatus);
+      receiptId = responseBody.receipt_id || responseBody.receiptId || responseBody.id || '';
+      verificationId = responseBody.verification_id || responseBody.verificationId || receiptId;
+      receiptSignature = extractReceiptSignature(responseBody);
+
+      receiptData = createReceiptEnvelope({
+        mode,
+        artifactHash,
+        artifactPath: providedArtifactHash ? '' : artifactPathInput,
+        source,
+        details: responseBody
+      });
+
+      if (!valid && failOnMismatch) {
+        fs.writeFileSync(receiptPath, JSON.stringify(receiptData, null, 2), 'utf8');
+        setOutput('receipt_path', receiptPath);
+        throw new Error(`TrustSignal verification was not valid. Status: ${verificationStatus}`);
+      }
+    } else {
+      receiptData = createReceiptEnvelope({
+        mode,
+        artifactHash,
+        artifactPath: providedArtifactHash ? '' : artifactPathInput,
+        source
+      });
+      process.stdout.write('TrustSignal local receipt created\n');
     }
 
-    const artifactHash = artifactPath
-      ? await sha256File(artifactPath)
-      : validateHash(providedArtifactHash);
+    fs.writeFileSync(receiptPath, JSON.stringify(receiptData, null, 2), 'utf8');
 
-    const responseBody = await callVerificationApi({
-      apiBaseUrl,
-      apiKey,
-      artifactHash,
-      artifactPath,
-      source
-    });
-
-    const verificationId =
-      responseBody.verification_id ||
-      responseBody.verificationId ||
-      responseBody.id ||
-      responseBody.receipt_id ||
-      responseBody.receiptId ||
-      '';
-    const receiptId = responseBody.receipt_id || responseBody.receiptId || '';
-    const status = deriveStatus(responseBody);
-    const receiptSignature = extractReceiptSignature(responseBody);
-    const isValid = isVerificationValid(responseBody, status);
-
-    setOutput('verification_id', verificationId);
-    setOutput('status', status);
+    setOutput('receipt_path', receiptPath);
+    setOutput('mode_used', mode);
     setOutput('receipt_id', receiptId);
     setOutput('receipt_signature', receiptSignature);
+    setOutput('verification_status', verificationStatus);
+    setOutput('verification_id', verificationId);
+    setOutput('status', verificationStatus);
 
-    if (failOnMismatch && !isValid) {
-      throw new Error(`TrustSignal verification was not valid. Status: ${status}`);
+    process.stdout.write(`Receipt saved to ${receiptPath}\n`);
+
+    if (uploadReceipt) {
+      await uploadReceiptArtifact(receiptPath);
+    }
+
+    if (verificationStatus === 'verified') {
+      process.stdout.write('Artifact matches receipt. Integrity verified.\n');
+    } else {
+      process.stdout.write(`Verification completed with status: ${verificationStatus}\n`);
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown action failure';
-    setFailed(message);
+    setFailed(error instanceof Error ? error.message : String(error));
   }
 }
 
