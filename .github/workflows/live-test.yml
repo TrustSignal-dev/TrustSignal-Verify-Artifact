@@ -30,7 +30,7 @@ jobs:
       - name: Verify against production API
         id: trustsignal
         if: ${{ env.TRUSTSIGNAL_API_KEY != '' }}
-        uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.0
+        TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.1
         with:
           mode: managed
           path: build/trustsignal-live-test-release.tgz
