@@ -19,7 +19,7 @@ global.fetch = async function mockFetch(url, options = {}) {
   const apiKey = options.headers && (options.headers['x-api-key'] || options.headers['X-API-Key']);
   const healthStatus = Number(process.env.MOCK_HEALTH_STATUS || '200');
   
-  if (parsedUrl.pathname === '/health') {
+  if (parsedUrl.pathname === '/api/v1/health') {
     return jsonResponse(healthStatus, { status: healthStatus >= 200 && healthStatus < 300 ? 'ok' : 'down' });
   }
 
