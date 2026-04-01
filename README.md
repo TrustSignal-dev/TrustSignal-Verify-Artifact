@@ -41,13 +41,13 @@ jobs:
 
       - name: Create local receipt
         id: baseline
-        uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.0
+        uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.1
         with:
           mode: local
           path: build/trustsignal-demo-release.tgz
 
       - name: Verify against the saved receipt
-        uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.0
+        uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.1
         with:
           mode: local
           path: build/trustsignal-demo-release.tgz
@@ -63,7 +63,7 @@ Managed mode sends the artifact hash and GitHub run metadata to TrustSignal.
 ```yaml
 - name: Verify with TrustSignal API
   id: trustsignal
-  uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.0
+  uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.1
   with:
     mode: managed
     path: build/trustsignal-demo-release.tgz
@@ -147,7 +147,7 @@ npm run validate:local
 
 The repository CI includes a guarded `Live Managed Validation` job that runs on a real GitHub Actions runner against `https://api.trustsignal.dev` whenever `TRUSTSIGNAL_API_KEY` is configured in repository secrets. That job is skipped for pull requests and for repositories without the secret.
 
-The repository also includes a nightly `Live Test Report` workflow that invokes the published `TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.0` action against the production API. The badge at the top of this README points to that workflow.
+The repository also includes a nightly `Live Test Report` workflow that invokes the published `TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.1` action against the production API. This workflow verifies the latest release integrity and ensures the health check path (`/api/v1/health`) is correctly handled. The badge at the top of this README points to that workflow.
 
 That nightly workflow now builds and verifies a real `.tgz` release archive so the live validation path matches the demo workflow instead of using a placeholder text artifact.
 
