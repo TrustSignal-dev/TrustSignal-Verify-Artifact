@@ -173,7 +173,7 @@ function buildVerificationRequest({ artifactHash, artifactPath, source }) {
 
 async function callHealthApi(apiBaseUrl) {
   try {
-    const response = await fetch(`${apiBaseUrl}/health`);
+    const response = await fetch(`${apiBaseUrl}/api/v1/health`);
     return response.ok;
   } catch {
     return false;
