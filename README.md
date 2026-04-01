@@ -82,12 +82,38 @@ Typical follow-up step:
     echo "Verification ID: ${{ steps.trustsignal.outputs.verification_id }}"
 ```
 
-Managed mode requires two things to agree:
+Managed mode supports two authentication methods:
 
-- GitHub repository secret `TRUSTSIGNAL_API_KEY`
-- TrustSignal API backend config that accepts that same key in `API_KEYS` and grants it `verify|read` in `API_KEY_SCOPES`
+### M2M Authentication (Recommended)
+This method uses Private Key JWT for secure, keyless-style authentication.
+1. Register your public key with TrustSignal.
+2. Add your `TRUSTSIGNAL_CLIENT_ID` and `TRUSTSIGNAL_PRIVATE_KEY` as repository secrets.
 
-If those two sides are out of sync, the action will fail with `403 Forbidden: invalid API key`.
+```yaml
+- name: Verify with TrustSignal M2M
+  uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.1
+  with:
+    mode: managed
+    path: build/release.tgz
+    api_base_url: https://api.trustsignal.dev
+    client_id: ${{ secrets.TRUSTSIGNAL_CLIENT_ID }}
+    private_key: ${{ secrets.TRUSTSIGNAL_PRIVATE_KEY }}
+```
+
+### Legacy API Key
+You can still use a traditional API key for simple integrations.
+1. Add a repository secret named `TRUSTSIGNAL_API_KEY`.
+2. Ensure the key is in the backend `API_KEYS` allowlist.
+
+```yaml
+- name: Verify with TrustSignal API Key
+  uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.1
+  with:
+    mode: managed
+    path: build/release.tgz
+    api_base_url: https://api.trustsignal.dev
+    api_key: ${{ secrets.TRUSTSIGNAL_API_KEY }}
+```
 
 Outputs:
 

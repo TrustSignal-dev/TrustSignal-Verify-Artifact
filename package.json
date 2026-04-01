@@ -20,7 +20,8 @@
     "validate:local": "npm run check && npm run test:hygiene && npm run test:local"
   },
   "dependencies": {
-    "@actions/artifact": "^2.1.1"
+    "@actions/artifact": "^2.1.1",
+    "jsonwebtoken": "^9.0.3"
   },
   "devDependencies": {
     "@vercel/ncc": "^0.38.1"
