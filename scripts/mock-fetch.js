@@ -16,7 +16,8 @@ function jsonResponse(status, body) {
 
 global.fetch = async function mockFetch(url, options = {}) {
   const parsedUrl = new URL(url);
-  const apiKey = options.headers && (options.headers['x-api-key'] || options.headers['X-API-Key']);
+  const authHeader = options.headers && (options.headers['authorization'] || options.headers['Authorization']);
+  const apiKey = authHeader?.startsWith('Key ') ? authHeader.slice(4) : (options.headers && (options.headers['x-api-key'] || options.headers['X-API-Key']));
   const healthStatus = Number(process.env.MOCK_HEALTH_STATUS || '200');
   
   if (parsedUrl.pathname === '/api/v1/health') {
