@@ -1,6 +1,6 @@
 {
   "name": "trustsignal-verify-artifact",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "GitHub Action for verifying build artifacts with TrustSignal and capturing signed verification receipts.",
   "main": "dist/index.js",
   "type": "commonjs",
