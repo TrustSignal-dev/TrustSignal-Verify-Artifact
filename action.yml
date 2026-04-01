@@ -21,7 +21,13 @@ inputs:
     description: Base URL for the TrustSignal API. Required in managed mode.
     required: false
   api_key:
-    description: API key for the TrustSignal API. Required in managed mode.
+    description: Legacy API key for the TrustSignal API.
+    required: false
+  client_id:
+    description: Client ID for M2M authentication.
+    required: false
+  private_key:
+    description: Private key for M2M authentication (Private Key JWT).
     required: false
   upload_receipt:
     description: Whether to upload the generated receipt as a GitHub Actions artifact.

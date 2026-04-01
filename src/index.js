@@ -1,6 +1,7 @@
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
+const jwt = require('jsonwebtoken');
 const { DefaultArtifactClient } = require('@actions/artifact');
 
 const FETCH_TIMEOUT_MS = 30000;
@@ -206,9 +207,48 @@ function buildApiErrorMessage(status, responseBody) {
   return `TrustSignal API request failed with status ${status}${suffix}`;
 }
 
-async function callVerificationApi({ apiBaseUrl, apiKey, artifactHash, artifactPath, source }) {
+async function getM2MToken({ apiBaseUrl, clientId, privateKey }) {
+  const endpoint = `${apiBaseUrl}/api/v1/token`;
+  const now = Math.floor(Date.now() / 1000);
+  
+  const assertion = jwt.sign({
+    iss: clientId,
+    sub: clientId,
+    aud: endpoint,
+    iat: now,
+    exp: now + 300,
+    jti: crypto.randomBytes(16).toString('hex')
+  }, privateKey, { algorithm: 'RS256' });
+
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'client_credentials',
+      client_assertion_type: 'urn:ietf:params:oauth:client-assertion-type:private-key-jwt',
+      client_assertion: assertion
+    })
+  });
+
+  const body = await parseJsonResponse(response);
+  if (!response.ok) {
+    throw new Error(`Failed to obtain M2M token: ${body.error || response.statusText}`);
+  }
+
+  return body.access_token;
+}
+
+async function callVerificationApi({ apiBaseUrl, apiKey, clientId, privateKey, artifactHash, artifactPath, source }) {
   const endpoint = `${apiBaseUrl}/api/v1/verify`;
   const payload = buildVerificationRequest({ artifactHash, artifactPath, source });
+
+  let authHeader;
+  if (privateKey && clientId) {
+    const token = await getM2MToken({ apiBaseUrl, clientId, privateKey });
+    authHeader = `Bearer ${token}`;
+  } else {
+    authHeader = `Key ${apiKey}`;
+  }
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
@@ -220,7 +260,7 @@ async function callVerificationApi({ apiBaseUrl, apiKey, artifactHash, artifactP
       headers: {
         'content-type': 'application/json',
         accept: 'application/json',
-        'x-api-key': apiKey
+        'authorization': authHeader
       },
       body: JSON.stringify(payload),
       signal: controller.signal
@@ -496,8 +536,16 @@ async function run() {
 
     if (mode === 'managed') {
       const apiBaseUrl = normalizeBaseUrl(getInput('api_base_url', { required: true }));
-      const apiKey = getInput('api_key', { required: true });
-      maskSecret(apiKey);
+      const apiKey = getInput('api_key');
+      const clientId = getInput('client_id');
+      const privateKey = getInput('private_key');
+
+      if (!apiKey && (!clientId || !privateKey)) {
+        throw new Error('Managed mode requires either api_key or both client_id and private_key');
+      }
+
+      if (apiKey) maskSecret(apiKey);
+      if (privateKey) maskSecret(privateKey);
 
       process.stdout.write(`Checking TrustSignal API health: ${apiBaseUrl}\n`);
       const healthy = await callHealthApi(apiBaseUrl);
@@ -509,6 +557,8 @@ async function run() {
       const responseBody = await callVerificationApi({
         apiBaseUrl,
         apiKey,
+        clientId,
+        privateKey,
         artifactHash,
         artifactPath: providedArtifactHash ? '' : artifactPathInput,
         source
