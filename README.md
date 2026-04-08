@@ -1,393 +1,48 @@
-# TrustSignal Verify Artifact
+# Deprecated: TrustSignal Verify Artifact
 
+> Status: `deprecated` `archived`
+>
+> This repo is historical only. The canonical GitHub Action source lives in `TrustSignal/github-actions/trustsignal-verify-artifact`.
 
+## Source of Truth
 
-[![Nightly Live Validation](https://github.com/TrustSignal-dev/TrustSignal-Verify-Artifact/actions/workflows/live-test.yml/badge.svg)](https://github.com/TrustSignal-dev/TrustSignal-Verify-Artifact/actions/workflows/live-test.yml)
+Canonical repo roles and ownership are defined in [TrustSignal/docs/REPO_ROLES.md](https://github.com/TrustSignal-dev/TrustSignal/blob/master/docs/REPO_ROLES.md).
 
-[![GitHub Marketplace](https://img.shields.io/badge/Marketplace-TrustSignal--Verify--Artifact-blue?logo=github)](https://github.com/marketplace/actions/trustsignal-verify-artifact)
+This repository is no longer the canonical TrustSignal GitHub Action.
 
+## Canonical action
 
+Use the monorepo action instead. The path below is the active replacement, not an invitation to keep publishing from this repository:
 
-GitHub Action for hashing build artifacts, creating offline verification receipts, and calling the TrustSignal managed verification API.
+- `TrustSignal/github-actions/trustsignal-verify-artifact`
+- Workflow path: `TrustSignal-dev/TrustSignal/github-actions/trustsignal-verify-artifact`
+- Pinning note: this repo set does not currently document a confirmed public monorepo release ref. Pin to a maintainer-published release tag or commit SHA.
 
+The canonical product stack is:
 
+1. API: `TrustSignal/apps/api`
+2. Public frontend: `v0-signal-new`
+3. GitHub App backend: `TrustSignal-App`
+4. GitHub Action: `TrustSignal/github-actions/trustsignal-verify-artifact`
 
-→ [Plain-English Setup Guide](docs/plain-english-setup.md) · [How to Demo](docs/how-to-demo-guide.md) · [Deck (PDF)](docs/wiki/TrustSignal_Your_File_Integrity_Sidekick.pdf)
+## Why this repo is deprecated
 
+This repository drifted away from the canonical action contract:
 
+- it uses a different auth path than the monorepo action
+- it documents the old env allowlist model
+- it creates ambiguity about which action pilots should install
 
----
+History is preserved here for reference, but pilots should not publish from or integrate against this repository.
 
+## Migration
 
+1. Stop using `TrustSignal-dev/TrustSignal-Verify-Artifact`.
+2. Move workflows to `TrustSignal-dev/TrustSignal/github-actions/trustsignal-verify-artifact`.
+3. Pin the action to a maintainer-published release tag or commit SHA. Do not assume a stable major alias exists until the monorepo release policy documents one.
+4. Keep using the secret name `TRUSTSIGNAL_API_KEY`.
+5. Target `https://api.trustsignal.dev`.
 
-## Quickstart
+## Status
 
-
-
-### 1. Local Mode — Offline Verification
-
-
-
-Generate a receipt for a build artifact, then verify against it later with no API call:
-
-
-
-```yaml
-
-name: Verify Artifact
-
-
-
-on: workflow_dispatch
-
-
-
-jobs:
-
-  verify:
-
-    runs-on: ubuntu-latest
-
-    steps:
-
-      - uses: actions/checkout@v4
-
-
-
-      - name: Build release archive
-
-        run: |
-
-          mkdir -p build/package
-
-          cp README.md build/package/README.md
-
-          tar -czf build/trustsignal-demo-release.tgz -C build/package .
-
-
-
-      - name: Create local receipt
-
-        id: baseline
-
-        uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.1
-
-        with:
-
-          mode: local
-
-          path: build/trustsignal-demo-release.tgz
-
-
-
-      - name: Verify against saved receipt
-
-        uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.1
-
-        with:
-
-          mode: local
-
-          path: build/trustsignal-demo-release.tgz
-
-          receipt: ${{ steps.baseline.outputs.receipt_path }}
-
-```
-
-
-
-### 2. Managed Mode — TrustSignal API
-
-
-
-Send the artifact hash and GitHub run metadata to TrustSignal for a signed verification receipt:
-
-
-
-```yaml
-
-- name: Verify with TrustSignal API
-
-  id: trustsignal
-
-  uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.1
-
-  with:
-
-    mode: managed
-
-    path: build/trustsignal-demo-release.tgz
-
-    api_base_url: https://api.trustsignal.dev
-
-    api_key: ${{ secrets.TRUSTSIGNAL_API_KEY }}
-
-
-
-- name: Show outputs
-
-  run: |
-
-    echo "SHA256: ${{ steps.trustsignal.outputs.sha256 }}"
-
-    echo "Status: ${{ steps.trustsignal.outputs.verification_status }}"
-
-    echo "Receipt: ${{ steps.trustsignal.outputs.receipt_id }}"
-
-    echo "Verification: ${{ steps.trustsignal.outputs.verification_id }}"
-
-```
-
-
-
----
-
-
-
-## Authentication
-
-
-
-### M2M (Recommended)
-
-
-
-Private Key JWT — secure, keyless-style authentication:
-
-
-
-```yaml
-
-- uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.1
-
-  with:
-
-    mode: managed
-
-    path: build/release.tgz
-
-    api_base_url: https://api.trustsignal.dev
-
-    client_id: ${{ secrets.TRUSTSIGNAL_CLIENT_ID }}
-
-    private_key: ${{ secrets.TRUSTSIGNAL_PRIVATE_KEY }}
-
-```
-
-
-
-### API Key
-
-
-
-Traditional API key for simple integrations:
-
-
-
-```yaml
-
-- uses: TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.1
-
-  with:
-
-    mode: managed
-
-    path: build/release.tgz
-
-    api_base_url: https://api.trustsignal.dev
-
-    api_key: ${{ secrets.TRUSTSIGNAL_API_KEY }}
-
-```
-
-
-
----
-
-
-
-## Outputs
-
-
-
-| Output | Description |
-
-|---|---|
-
-| `sha256` | SHA-256 hash of the artifact |
-
-| `receipt_path` | Path to the saved receipt JSON |
-
-| `verification_status` | Verification lifecycle status |
-
-| `verification_id` | Managed verification identifier |
-
-| `receipt_id` | Receipt identifier |
-
-| `receipt_signature` | Receipt cryptographic signature |
-
-
-
----
-
-
-
-## Why TrustSignal
-
-
-
-| Feature | TrustSignal | GitHub Attestations | Sigstore / Cosign |
-
-|---|---|---|---|
-
-| Zero extra CLI dependencies | ✅ | ✅ | ❌ |
-
-| Cross-platform receipt workflow | ✅ | ❌ | ✅ |
-
-| Offline drift check from saved receipt | ✅ | ❌ | ❌ |
-
-| Centralized verification service | ✅ | ❌ | ❌ |
-
-| SLSA-focused provenance depth | Roadmap | Strong | Strong |
-
-| Setup complexity | Low | Very low | Medium |
-
-
-
-Best fit when you need to:
-
-- Verify an artifact later without calling the API again using a saved receipt
-
-- Carry a verification receipt between platforms (not locked to GitHub-native primitives)
-
-- Add a centralized verification trail without a heavier client toolchain
-
-
-
----
-
-
-
-## Local Drift Detection
-
-
-
-The `receipt` input accepts:
-
-- A local path to a receipt JSON file
-
-- Inline receipt JSON containing an artifact hash
-
-- A raw SHA-256 digest
-
-
-
-If the current hash does not match, the action returns `verification_status=invalid` and fails when `fail_on_mismatch=true`.
-
-
-
----
-
-
-
-## API Key Provisioning
-
-
-
-The same key must exist in both places:
-
-
-
-1. **GitHub:** Repository secret `TRUSTSIGNAL_API_KEY`
-
-2. **TrustSignal backend:** `API_KEYS` and `API_KEY_SCOPES` environment variables
-
-
-
-```
-
-API_KEYS=your-live-key
-
-API_KEY_SCOPES=your-live-key=verify|read
-
-```
-
-
-
-Rotate both simultaneously.
-
-
-
----
-
-
-
-## Development
-
-
-
-```bash
-
-npm ci
-
-npm run validate:local
-
-```
-
-
-
-`validate:local` uses the repository mock fetch harness for managed-mode tests and rebuilds `dist/index.js` to confirm the committed bundle matches source.
-
-
-
----
-
-
-
-## CI & Live Validation
-
-
-
-- **CI** — Runs on PRs and pushes to `main`
-
-- **Live Managed Validation** — Runs against `https://api.trustsignal.dev` when `TRUSTSIGNAL_API_KEY` is configured (skipped on PRs and repos without the secret)
-
-- **Nightly Live Test** — Builds and verifies a real `.tgz` archive against the production API
-
-
-
----
-
-
-
-## Documentation
-
-
-
-| Resource | Path |
-
-|---|---|
-
-| Plain-English Setup | [docs/plain-english-setup.md](docs/plain-english-setup.md) |
-
-| How to Demo | [docs/how-to-demo-guide.md](docs/how-to-demo-guide.md) |
-
-| Integration Guide | [docs/integration.md](docs/integration.md) |
-
-| Live Test Notes | [docs/live-test.md](docs/live-test.md) |
-
-| Troubleshooting | [docs/troubleshooting.md](docs/troubleshooting.md) |
-
-| Changelog | [CHANGELOG.md](CHANGELOG.md) |
-
-
-
----
-
-
-
-## License
-
-
-
-MIT
+Archived/deprecated surface only. No new releases should be cut from this repository.
