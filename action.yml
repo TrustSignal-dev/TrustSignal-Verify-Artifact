@@ -1,5 +1,5 @@
-name: TrustSignal Verify Artifact
-description: Verify build artifacts and issue TrustSignal verification receipts in local or managed mode.
+name: TrustSignal Verify Artifact (Legacy)
+description: Legacy historical action retained for reference only. The canonical public action now lives in TrustSignal/github-actions/trustsignal-verify-artifact.
 author: TrustSignal
 branding:
   icon: shield

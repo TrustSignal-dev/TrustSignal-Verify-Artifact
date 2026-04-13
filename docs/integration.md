@@ -1,5 +1,7 @@
 # Integration Guide
 
+> Legacy note: this guide documents the deprecated standalone action repository for historical reference only. New integrations should use `TrustSignal-dev/TrustSignal/github-actions/trustsignal-verify-artifact`.
+
 ## Overview
 
 `TrustSignal Verify Artifact` verifies build artifacts in CI, issues signed verification receipts, and returns receipt metadata that downstream systems can use for provenance and later verification workflows.
@@ -73,10 +75,10 @@ If the API omits a distinct verification identifier, the action uses `receipt_id
 
 - Local validation still uses a deterministic mock fetch harness for fast repeatable tests.
 - The repository now also includes real GitHub-hosted validation against `https://api.trustsignal.dev`.
-- The published action `TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.0` has been exercised successfully from a real GitHub Actions runner.
+- Historical note: the published action `TrustSignal-dev/TrustSignal-Verify-Artifact@v0.2.0` was exercised from a real GitHub Actions runner before this repo was deprecated.
 
 ## Next Steps
 
 - Maintain the live validation workflows in `docs/live-test.md`.
 - Keep the backend key provisioning contract documented anywhere `TRUSTSIGNAL_API_KEY` is referenced.
-- Publish and maintain a stable `v0` major tag once release management is finalized.
+- Do not treat this repository as the active release path. Use the canonical monorepo action path instead.

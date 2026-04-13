@@ -1,5 +1,7 @@
 # Live External Test
 
+> Legacy note: this document describes historical validation paths for the deprecated standalone action repository.
+
 The repository now includes two real-runner managed-mode paths:
 
 - `.github/workflows/ci.yml` runs `Live Managed Validation` on pushes and manual dispatches when `TRUSTSIGNAL_API_KEY` is configured.

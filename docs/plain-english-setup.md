@@ -1,5 +1,7 @@
 # TrustSignal in Plain English
 
+> Legacy note: this setup guide is retained for the deprecated standalone action repository. Public installation guidance now belongs to `TrustSignal-dev/TrustSignal/github-actions/trustsignal-verify-artifact`.
+
 This guide turns the TrustSignal "File Integrity Sidekick" deck into repo-accurate setup instructions for the published `TrustSignal Verify Artifact` action.
 
 Use this when you want the shortest path from zero setup to a real verification run.
@@ -21,8 +23,8 @@ If you only want offline receipt checks, you can skip this section and use `loca
 
 If you want live TrustSignal verification:
 
-1. Sign in at `trustsignal.dev`.
-2. Generate an API key in your TrustSignal account or dashboard.
+1. Request or obtain API access through the current TrustSignal onboarding path.
+2. Generate an API key only through the authenticated TrustSignal surface when that path is deployed.
 3. Open your GitHub repository.
 4. Go to `Settings -> Secrets and variables -> Actions`.
 5. Add a repository secret named `TRUSTSIGNAL_API_KEY`.

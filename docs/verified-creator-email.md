@@ -1,5 +1,7 @@
 # Draft Email: Verified Creator Review Request
 
+> Historical note: this draft is archived planning material for the deprecated standalone action repository. It is not current publication guidance.
+
 Subject: Request for Verified Creator review for TrustSignal Marketplace action
 
 Hello GitHub Partnerships team,

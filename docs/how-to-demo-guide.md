@@ -1,5 +1,7 @@
 # How To Demo TrustSignal
 
+> Legacy note: this demo guide is retained for the deprecated standalone action repository. New installs should use `TrustSignal-dev/TrustSignal/github-actions/trustsignal-verify-artifact`.
+
 This guide is the shortest reliable path to demo both:
 
 - the `TrustSignal Verify Artifact` GitHub Action

@@ -1,5 +1,7 @@
 # Marketplace Readiness Checklist
 
+> Historical note: this checklist is retained as archived Marketplace-preparation context for the deprecated standalone action repository.
+
 Status: preparation checklist for GitHub Marketplace publication and trust review. This document does not claim GitHub approval, certification, or partner status.
 
 ## Repo-Level Readiness
